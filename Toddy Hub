@@ -1,0 +1,1016 @@
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+local UiManager = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))();
+local ScriptUrl = "https://raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/Modules/";
+local PlayerService = game:GetService("Players");
+local ReplicatedStorage = game:GetService("ReplicatedStorage");
+local WorkspaceService = game:GetService("Workspace");
+local PlayerService1 = game:GetService("Players");
+local RunService = game:GetService("RunService");
+local UserInputService = game:GetService("UserInputService");
+local LocalPlayer = PlayerService1.LocalPlayer;
+
+local CorrectPlaceId = 12355337193;
+if game.PlaceId ~= CorrectPlaceId then
+    LocalPlayer:Kick("Jogo incorreto. Execute este script somente no jogo correto.");
+    return;
+end;
+
+local AnimationFolder = ReplicatedStorage:WaitForChild("Animations");
+local RemoteFolder = ReplicatedStorage:WaitForChild("Remotes");
+local ModuleFolder = ReplicatedStorage:WaitForChild("Modules");
+local ShootAnimation = AnimationFolder:WaitForChild("Shoot");
+local ShootGunRemote = RemoteFolder:WaitForChild("ShootGun");
+local BulletRenderer = require(ModuleFolder:WaitForChild("BulletRenderer"));
+local GunConfig = {
+    GUN = "Gun_Equip"
+};
+local MaxDistance = 250;
+getgenv().aimConfig = {
+    MAX_DISTANCE = 250, 
+    MAX_VELOCITY = 40, 
+    VISIBLE_PARTS = 4, 
+    CAMERA_CAST = true, 
+    FOV_CHECK = true, 
+    REACTION_TIME = 0.01, 
+    ACTION_TIME = 0.3, 
+    AUTO_EQUIP = false, 
+    EQUIP_LOOP = 0.3, 
+    NATIVE_UI = true, 
+    DEVIATION_ENABLED = true, 
+    BASE_DEVIATION = 2.05, 
+    DISTANCE_FACTOR = 0.6, 
+    VELOCITY_FACTOR = 0.9, 
+    ACCURACY_BUILDUP = 0.14, 
+    MIN_DEVIATION = 1, 
+    RAYCAST_DISTANCE = 1000
+};
+getgenv().killButton = {
+    gun = false, 
+    knife = false
+};
+getgenv().killLoop = {
+    gun = false, 
+    knife = false
+};
+UiManager:AddTheme({
+    Name = "Solar", 
+    Accent = "#ff9d3a", 
+    Dialog = "#2a1b0f", 
+    Outline = "#ffd8a1", 
+    Text = "#fff5e0", 
+    Placeholder = "#7a6554", 
+    Background = "#1b120c", 
+    Button = "#ff7b00", 
+    Icon = "#ffcc33"
+});
+local MainWindow = UiManager:CreateWindow({
+    Title = "Toddy Hub", 
+    Icon = "rbxassetid://121287158585668", 
+    Author = "Criado Por Godenot", 
+    Folder = "ToddyHub", 
+    Size = UDim2.fromOffset(420, 420), 
+    Transparent = false, 
+    Theme = "Dark", 
+    Resizable = true, 
+    SideBarWidth = 200, 
+    HideSearchBar = true, 
+    ScrollBarEnabled = false, 
+    CornerRadius = UDim.new(0, 14), 
+    DropShadow = true
+});
+MainWindow:EditOpenButton({
+    Title = "Toddy Hub", 
+    Icon = "rbxassetid://121287158585668", 
+    CornerRadius = UDim.new(0, 16), 
+    StrokeThickness = 2, 
+    Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromHex("#FF0F7B")), 
+        ColorSequenceKeypoint.new(1, Color3.fromHex("#F89B29"))
+    }), 
+    OnlyMobile = true, 
+    Enabled = true, 
+    Draggable = true
+});
+local Settings = {};
+loadModule = function(ScriptName) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v17 (ref), v1 (ref)
+    if Settings[ScriptName] then
+        return;
+    else
+        table.insert(Settings, ScriptName);
+        local Settings1 = Settings;
+        local LoadStatus, LoadResult = pcall(loadstring(game:HttpGet(ScriptUrl .. ScriptName)));
+        Settings1[ScriptName] = LoadResult;
+        _ = LoadStatus;
+        return;
+    end;
+end;
+local NilValue = nil;
+local NilValue1 = nil;
+lockToggle = function(ParamValue) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v22 (ref), v23 (ref)
+    if ParamValue == "knife" and NilValue and NilValue.Lock then
+        NilValue:Lock();
+        return;
+    elseif ParamValue == "gun" and NilValue1 and NilValue1.Lock then
+        NilValue1:Lock();
+        return;
+    else
+        if NilValue and NilValue.Unlock then
+            NilValue:Unlock();
+        end;
+        if NilValue1 and NilValue1.Unlock then
+            NilValue1:Unlock();
+        end;
+        return;
+    end;
+end;
+local PlayerService2 = game:GetService("Players");
+local RunService1 = game:GetService("RunService");
+local WorkspaceService1 = game:GetService("Workspace");
+local LocalPlayer1 = PlayerService2.LocalPlayer;
+local CurrentCamera = WorkspaceService1.CurrentCamera;
+local ColorValue = Color3.fromRGB(30, 214, 134);
+local ColorValue1 = Color3.fromRGB(15, 107, 67);
+local ColorValue2 = Color3.fromRGB(255, 41, 121);
+local ColorValue3 = Color3.fromRGB(127, 20, 60);
+getgenv().espEnemies = true;
+getgenv().espTeamMates = false;
+getgenv().espTracers = true;
+local TableValue2 = {};
+local function Func3() --[[ Line: 0 ]] --[[ Name:  ]]
+    local DrawingInstance = Drawing.new("Line");
+    DrawingInstance.Visible = false;
+    DrawingInstance.From = Vector2.new(0, 0);
+    DrawingInstance.To = Vector2.new(0, 0);
+    DrawingInstance.Thickness = 1.5;
+    DrawingInstance.Transparency = 0.8;
+    return DrawingInstance;
+end;
+local function Func4(ParamValue2, ParamValue3, ParamValue4, ParamValue5) --[[ Line: 0 ]] --[[ Name:  ]]
+    local HumanoidRootPart = ParamValue2:FindFirstChild("HumanoidRootPart");
+    if not HumanoidRootPart then
+        return;
+    else
+        local HighlightInstance = Instance.new("Highlight");
+        HighlightInstance.Name = "ESP_Highlight";
+        HighlightInstance.OutlineColor = ParamValue4;
+        HighlightInstance.FillColor = ParamValue5;
+        HighlightInstance.FillTransparency = 0.7;
+        HighlightInstance.Parent = ParamValue2;
+        local BillboardGui = Instance.new("BillboardGui");
+        BillboardGui.AlwaysOnTop = true;
+        BillboardGui.Size = UDim2.new(0, 200, 0, 50);
+        BillboardGui.StudsOffset = Vector3.new(0, 3, 0);
+        BillboardGui.Name = "ESP_Label";
+        BillboardGui.Adornee = HumanoidRootPart;
+        BillboardGui.Parent = HumanoidRootPart;
+        local TextLabel = Instance.new("TextLabel");
+        TextLabel.BackgroundTransparency = 1;
+        TextLabel.Text = ParamValue3.Name;
+        TextLabel.TextColor3 = Color3.new(1, 1, 1);
+        TextLabel.TextStrokeTransparency = 0;
+        TextLabel.Font = Enum.Font.Ubuntu;
+        TextLabel.TextSize = 14;
+        TextLabel.Size = UDim2.new(1, 0, 1, 0);
+        TextLabel.Parent = BillboardGui;
+        return HighlightInstance, BillboardGui;
+    end;
+end;
+local function Function(Parameter) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v93 (ref)
+    if TableValue2[Parameter] then
+        local Orb = TableValue2[Parameter];
+        do
+            local Orb1 = Orb;
+            if Orb1.tracer then
+                pcall(function() --[[ Line: 0 ]] --[[ Name:  ]]
+                    -- upvalues: l_v106_0 (ref)
+                    Orb1.tracer:Remove();
+                end);
+            end;
+            if Orb1.highlight then
+                Orb1.highlight:Destroy();
+            end;
+            if Orb1.billboard then
+                Orb1.billboard:Destroy();
+            end;
+            TableValue2[Parameter] = nil;
+        end;
+    end;
+end;
+local function Func1(TeamMember) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: l_LocalPlayer_2 (ref), v89 (ref), v91 (ref), v90 (ref), v92 (ref), v104 (ref), v95 (ref), v93 (ref), v108 (ref)
+    TeamMember.CharacterAdded:Connect(function(TeamMember1) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v109 (ref), l_LocalPlayer_2 (ref), v89 (ref), v91 (ref), v90 (ref), v92 (ref), v104 (ref), v95 (ref), v93 (ref)
+        TeamMember1:WaitForChild("HumanoidRootPart");
+        task.wait(0.2);
+        local TeamCheck = TeamMember.Team == LocalPlayer1.Team;
+        local Condition = TeamCheck and ColorValue or ColorValue2;
+        local Condition1 = TeamCheck and ColorValue1 or ColorValue3;
+        local Result, Result1 = Func4(TeamMember1, TeamMember, Condition, Condition1);
+        local Func2 = Func3();
+        TableValue2[TeamMember] = {
+            tracer = Func2, 
+            highlight = Result, 
+            billboard = Result1, 
+            character = TeamMember1
+        };
+    end);
+    TeamMember.CharacterRemoving:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v108 (ref), v109 (ref)
+        Function(TeamMember);
+    end);
+end;
+for PlayerService, LoopVariable in pairs(PlayerService2:GetPlayers()) do
+    if LoopVariable ~= LocalPlayer1 then
+        Func1(LoopVariable);
+    end;
+end;
+PlayerService2.PlayerAdded:Connect(function(Parameter1) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: l_LocalPlayer_2 (ref), v117 (ref)
+    if Parameter1 ~= LocalPlayer1 then
+        Func1(Parameter1);
+    end;
+end);
+PlayerService2.PlayerRemoving:Connect(Function);
+RunService1.RenderStepped:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v93 (ref), l_LocalPlayer_2 (ref), l_CurrentCamera_0 (ref), v89 (ref), v91 (ref)
+    for LoopVariable1, LoopVariable2 in pairs(TableValue2) do
+        local CharacterModel = LoopVariable2.character;
+        local CharacterCheck = CharacterModel and CharacterModel:FindFirstChild("HumanoidRootPart");
+        local LocalCharacter = LocalPlayer1.Character and LocalPlayer1.Character:FindFirstChild("HumanoidRootPart");
+        local TeamCheck1 = LoopVariable1.Team == LocalPlayer1.Team;
+        if (not getgenv().espEnemies or TeamCheck1) and (not getgenv().espTeamMates or not TeamCheck1) or not CharacterCheck or not LocalCharacter then
+            LoopVariable2.tracer.Visible = false;
+            if LoopVariable2.highlight then
+                LoopVariable2.highlight.Enabled = false;
+            end;
+            if LoopVariable2.billboard then
+                LoopVariable2.billboard.Enabled = false;
+            end;
+        else
+            if LoopVariable2.highlight then
+                LoopVariable2.highlight.Enabled = true;
+            end;
+            if LoopVariable2.billboard then
+                LoopVariable2.billboard.Enabled = true;
+            end;
+            if getgenv().espTracers and CurrentCamera then
+                local Distance = (LocalCharacter.Position - CharacterCheck.Position).Magnitude;
+                local RangeCheck = (getgenv().espTracerRange or 0) > 0 and Distance <= getgenv().espTracerRange;
+                local ViewportPoint, ViewportPoint1 = CurrentCamera:WorldToViewportPoint(CharacterCheck.Position);
+                if ViewportPoint1 and RangeCheck then
+                    LoopVariable2.tracer.Visible = true;
+                    LoopVariable2.tracer.From = Vector2.new(CurrentCamera.ViewportSize.X / 2, CurrentCamera.ViewportSize.Y);
+                    LoopVariable2.tracer.To = Vector2.new(ViewportPoint.X, ViewportPoint.Y);
+                    LoopVariable2.tracer.Color = TeamCheck1 and ColorValue or ColorValue2;
+                else
+                    LoopVariable2.tracer.Visible = false;
+                end;
+            else
+                LoopVariable2.tracer.Visible = false;
+            end;
+        end;
+    end;
+end);
+-- Auto Shot helpers: kept separate from the removed Kill All features.
+local AutoShotRaycastParams = RaycastParams.new()
+AutoShotRaycastParams.IgnoreWater = true
+AutoShotRaycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+local function AutoShotFindTool(animationName)
+    local character = LocalPlayer and LocalPlayer.Character
+    if not character then return nil end
+    local fallback
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Tool") then
+            if item:GetAttribute("EquipAnimation") == animationName then
+                return item
+            end
+            if not fallback and item:FindFirstChild("Muzzle", true) then
+                fallback = item
+            end
+        end
+    end
+    return fallback
+end
+
+local function AutoShotHasLineOfSight(targetPart, origin)
+    local character = LocalPlayer and LocalPlayer.Character
+    if not character or not targetPart then return false end
+    AutoShotRaycastParams.FilterDescendantsInstances = {character}
+    local direction = targetPart.Position - origin
+    if direction.Magnitude <= 0 then return true end
+    local hit = WorkspaceService:Raycast(origin, direction.Unit * direction.Magnitude, AutoShotRaycastParams)
+    return not hit or hit.Instance:IsDescendantOf(targetPart.Parent)
+end
+
+local function AutoShotFindTarget(originPart)
+    local closestPlayer, closestRoot
+    local bestDistance = MaxDistance + 1
+    local gun = AutoShotFindTool(GunConfig.GUN)
+    if not gun then return nil, nil end
+    local muzzle = gun:FindFirstChild("Muzzle", true)
+    if not muzzle then return nil, nil end
+    for _, candidate in ipairs(PlayerService1:GetPlayers()) do
+        if candidate ~= LocalPlayer and candidate.Character and candidate.Character.Parent
+            and (not candidate.Team or not LocalPlayer.Team or candidate.Team ~= LocalPlayer.Team) then
+            local character = candidate.Character
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local root = character:FindFirstChild("HumanoidRootPart")
+            if humanoid and humanoid.Health > 0 and root then
+                local distance = (root.Position - originPart.Position).Magnitude
+                if distance < bestDistance and distance <= MaxDistance then
+                    bestDistance = distance
+                    closestPlayer, closestRoot = candidate, root
+                end
+            end
+        end
+    end
+    return closestPlayer, closestRoot
+end
+
+local function AutoShotFire(targetRoot, animator)
+    local gun = AutoShotFindTool(GunConfig.GUN)
+    if not gun or not targetRoot or not targetRoot:IsDescendantOf(WorkspaceService) then return end
+    local muzzle = gun:FindFirstChild("Muzzle", true)
+    if not muzzle then return end
+    local origin = muzzle.WorldPosition
+    local targetPosition = targetRoot.Position + Vector3.new(0, 2, 0)
+    if animator and ShootAnimation then pcall(function() animator:LoadAnimation(ShootAnimation):Play() end) end
+    local fireSound = gun:FindFirstChild("Fire")
+    if fireSound then pcall(function() fireSound:Play() end) end
+    if BulletRenderer then pcall(BulletRenderer, origin, targetPosition, "Default") end
+    if AutoShotHasLineOfSight(targetRoot, origin) and ShootGunRemote then
+        pcall(function() ShootGunRemote:FireServer(origin, targetPosition, targetRoot, targetPosition) end)
+    end
+end
+
+local RageTab = MainWindow:Tab({
+    Title = "Fúria", 
+    Icon = "skull", 
+    Locked = false
+});
+RageTab:Section({
+    Title = "Disparo Automático", 
+    Icon = "crosshair"
+});
+local Value = 0.1;
+local NilValue2 = nil;
+local AutoShootToggle = RageTab:Toggle({
+    Title = "Disparo Automático", 
+    Callback = function(AutoShootParameter) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v201 (ref), l_RunService_0 (ref), v200 (ref), l_LocalPlayer_1 (ref), v191 (ref), v199 (ref)
+        if AutoShootParameter and not NilValue2 then
+            local InitialValue = 0;
+            do
+                local InitialValue1 = InitialValue;
+                NilValue2 = RunService.Heartbeat:Connect(function(Parameter10) --[[ Line: 0 ]] --[[ Name:  ]]
+                    -- upvalues: l_v203_0 (ref), v200 (ref), l_LocalPlayer_1 (ref), v191 (ref), v199 (ref)
+                    InitialValue1 = InitialValue1 + Parameter10;
+                    if InitialValue1 < Value then
+                        return;
+                    else
+                        InitialValue1 = 0;
+                        local CharacterModel4 = LocalPlayer.Character;
+                        if not CharacterModel4 then
+                            return;
+                        else
+                            local HumanoidRootPart2 = CharacterModel4:FindFirstChild("HumanoidRootPart");
+                            local HumanoidObject = CharacterModel4:FindFirstChild("Humanoid");
+                            local HumanoidComponent = HumanoidObject and HumanoidObject:FindFirstChild("Animator");
+                            if not HumanoidRootPart2 or not HumanoidObject or not HumanoidComponent then
+                                return;
+                            else
+                                local RootPartParam, RootPartValue = AutoShotFindTarget(HumanoidRootPart2);
+                                if RootPartParam and RootPartValue then
+                                    pcall(AutoShotFire, RootPartValue, HumanoidComponent);
+                                end;
+                                return;
+                            end;
+                        end;
+                    end;
+                end);
+            end;
+        elseif not AutoShootParameter and NilValue2 then
+            NilValue2:Disconnect();
+            NilValue2 = nil;
+        end;
+    end
+});
+local AutoShootDelay = RageTab:Slider({
+    Title = "Atraso do Disparo Automático", 
+    Step = 0.01, 
+    Value = {
+        Min = 0.1, 
+        Max = 0.3, 
+        Default = Value
+    }, 
+    Callback = function(FunctionParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v200 (ref)
+        Value = tonumber(FunctionParam);
+    end
+});
+
+local EspTab = MainWindow:Tab({
+    Title = "Visualização", 
+    Icon = "eye", 
+    Locked = false
+});
+EspTab:Section({
+    Title = "Visualização", 
+    Icon = "eye"
+});
+local EspToggle = EspTab:Toggle({
+    Title = "Visualização", 
+    Value = true, 
+    Callback = function(EspParameter) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().espEnemies = EspParameter;
+    end
+});
+EspTab:Section({
+    Title = "Configurações", 
+    Icon = "settings"
+});
+local DisplayToggle = EspTab:Toggle({
+    Title = "Exibir Equipe", 
+    Value = false, 
+    Callback = function(DisplayParameter) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().espTeamMates = DisplayParameter;
+    end
+});
+local TracersToggle = EspTab:Toggle({
+    Title = "Rastros", 
+    Value = true, 
+    Callback = function(TracersParameter) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().espTracers = TracersParameter;
+        getgenv().espTracerRange = TracersParameter and 300 or 0;
+    end
+});
+local HitboxTab = MainWindow:Tab({
+    Title = "Áreas de Acerto", 
+    Icon = "swords", 
+    Locked = false
+});
+local PlayerService = game:GetService("Players");
+local RunService = game:GetService("RunService");
+local LocalPlayer = PlayerService.LocalPlayer;
+local HitboxConfig = {
+    Enabled = false, 
+    ShowHitboxes = false, 
+    Size = 5, 
+    Color = Color3.fromRGB(255, 0, 0), 
+    Transparency = 0.5
+};
+local EmptyConfig = {};
+local function LocalFunction() --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref), v220 (ref)
+    while HitboxConfig.Enabled do
+        wait(0.1);
+        for PlayerService, LoopVariable in pairs(PlayerService:GetPlayers()) do
+            if LoopVariable ~= LocalPlayer and LoopVariable.Team ~= LocalPlayer.Team then
+                local CharacterModel = LoopVariable.Character;
+                if CharacterModel then
+                    local RootPart = CharacterModel:FindFirstChild("HumanoidRootPart");
+                    if RootPart then
+                        if not EmptyConfig[LoopVariable] then
+                            EmptyConfig[LoopVariable] = {
+                                Size = RootPart.Size, 
+                                Transparency = RootPart.Transparency, 
+                                Color = RootPart.Color
+                            };
+                        end;
+                        RootPart.Size = Vector3.new(HitboxConfig.Size, HitboxConfig.Size, HitboxConfig.Size);
+                        RootPart.CanCollide = false;
+                        RootPart.Transparency = HitboxConfig.ShowHitboxes and HitboxConfig.Transparency or 1;
+                        RootPart.Color = HitboxConfig.Color;
+                    end;
+                end;
+            end;
+        end;
+    end;
+    for PlayerService, LoopVariable1 in pairs(PlayerService:GetPlayers()) do
+        if LoopVariable1 ~= LocalPlayer and LoopVariable1.Team ~= LocalPlayer.Team then
+            local CharacterModel1 = LoopVariable1.Character;
+            if CharacterModel1 then
+                local RootPart1 = CharacterModel1:FindFirstChild("HumanoidRootPart");
+                if RootPart1 and EmptyConfig[LoopVariable1] then
+                    RootPart1.Size = EmptyConfig[LoopVariable1].Size;
+                    RootPart1.Transparency = EmptyConfig[LoopVariable1].Transparency;
+                    RootPart1.Color = EmptyConfig[LoopVariable1].Color;
+                    RootPart1.CanCollide = false;
+                end;
+            end;
+        end;
+    end;
+    EmptyConfig = {};
+end;
+local function LocalFunction1(FunctionParam1) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: v219 (ref), l_LocalPlayer_5 (ref), v220 (ref)
+    FunctionParam1.CharacterAdded:Connect(function(FunctionParam2) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), v230 (ref), l_LocalPlayer_5 (ref), v220 (ref)
+        if HitboxConfig.Enabled then
+            local RootPart2 = FunctionParam2:FindFirstChild("HumanoidRootPart");
+            if RootPart2 and FunctionParam1 ~= LocalPlayer and FunctionParam1.Team ~= LocalPlayer.Team then
+                EmptyConfig[FunctionParam1] = {
+                    Size = RootPart2.Size, 
+                    Transparency = RootPart2.Transparency, 
+                    Color = RootPart2.Color
+                };
+                RootPart2.Size = Vector3.new(HitboxConfig.Size, HitboxConfig.Size, HitboxConfig.Size);
+                RootPart2.CanCollide = false;
+                RootPart2.Transparency = HitboxConfig.ShowHitboxes and HitboxConfig.Transparency or 1;
+                RootPart2.Color = HitboxConfig.Color;
+            end;
+        end;
+    end);
+end;
+HitboxTab:Section({
+    Title = "Área de Acerto", 
+    Icon = "gamepad-2"
+});
+HitboxToggle = HitboxTab:Toggle({
+    Title = "Ativar Área de Acerto", 
+    Default = false, 
+    Callback = function(FunctionParam3) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), l_Players_5 (ref), v233 (ref), v229 (ref), v220 (ref)
+        HitboxConfig.Enabled = FunctionParam3;
+        if FunctionParam3 then
+            for PlayerService, LoopVariable2 in ipairs(PlayerService:GetPlayers()) do
+                LocalFunction1(LoopVariable2);
+            end;
+            PlayerService.PlayerAdded:Connect(LocalFunction1);
+            spawn(LocalFunction);
+        else
+            EmptyConfig = {};
+        end;
+    end
+});
+HitboxTab:Section({
+    Title = "Configurações", 
+    Icon = "settings"
+});
+ShowToggle = HitboxTab:Toggle({
+    Title = "Mostrar Áreas de Acerto", 
+    Default = false, 
+    Callback = function(FunctionParam4) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
+        HitboxConfig.ShowHitboxes = FunctionParam4;
+        for PlayerService, LoopVariable3 in pairs(PlayerService:GetPlayers()) do
+            if LoopVariable3 ~= LocalPlayer and LoopVariable3.Team ~= LocalPlayer.Team then
+                local CharacterModel2 = LoopVariable3.Character;
+                if CharacterModel2 then
+                    local RootPart3 = CharacterModel2:FindFirstChild("HumanoidRootPart");
+                    if RootPart3 then
+                        RootPart3.Transparency = FunctionParam4 and HitboxConfig.Transparency or 1;
+                    end;
+                end;
+            end;
+        end;
+    end
+});
+SizeToggle = HitboxTab:Slider({
+    Title = "Tamanho da Área de Acerto", 
+    Value = {
+        Min = 1, 
+        Max = 250, 
+        Default = 5, 
+        Step = 0.1
+    }, 
+    Callback = function(FunctionParam5) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
+        HitboxConfig.Size = FunctionParam5;
+        for PlayerService, LoopVariable4 in pairs(PlayerService:GetPlayers()) do
+            if LoopVariable4 ~= LocalPlayer and LoopVariable4.Team ~= LocalPlayer.Team then
+                local CharacterModel3 = LoopVariable4.Character;
+                if CharacterModel3 then
+                    local RootPart4 = CharacterModel3:FindFirstChild("HumanoidRootPart");
+                    if RootPart4 then
+                        RootPart4.Size = Vector3.new(FunctionParam5, FunctionParam5, FunctionParam5);
+                    end;
+                end;
+            end;
+        end;
+    end
+});
+ColorToggle = HitboxTab:Colorpicker({
+    Title = "Cor da Área de Acerto", 
+    Default = Color3.fromRGB(255, 0, 0), 
+    Transparency = 0.5, 
+    Callback = function(FunctionParam6, FunctionParam7) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
+        HitboxConfig.Color = FunctionParam6;
+        HitboxConfig.Transparency = FunctionParam7;
+        for PlayerService, LoopVariable5 in pairs(PlayerService:GetPlayers()) do
+            if LoopVariable5 ~= LocalPlayer and LoopVariable5.Team ~= LocalPlayer.Team then
+                local CharacterModel4 = LoopVariable5.Character;
+                if CharacterModel4 then
+                    local RootPart5 = CharacterModel4:FindFirstChild("HumanoidRootPart");
+                    if RootPart5 then
+                        RootPart5.Color = FunctionParam6;
+                        RootPart5.Transparency = HitboxConfig.ShowHitboxes and FunctionParam7 or 1;
+                    end;
+                end;
+            end;
+        end;
+    end
+});
+Trans = HitboxTab:Slider({
+    Title = "Transparência da Área de Acerto", 
+    Step = 0.1, 
+    Value = {
+        Min = 0, 
+        Max = 1, 
+        Default = 0.5
+    }, 
+    Callback = function(FunctionParam8) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
+        HitboxConfig.Transparency = FunctionParam8;
+        for PlayerService, LoopVariable6 in pairs(PlayerService:GetPlayers()) do
+            if LoopVariable6 ~= LocalPlayer and LoopVariable6.Team ~= LocalPlayer.Team then
+                local CharacterModel5 = LoopVariable6.Character;
+                if CharacterModel5 then
+                    local RootPart6 = CharacterModel5:FindFirstChild("HumanoidRootPart");
+                    if RootPart6 then
+                        RootPart6.Transparency = HitboxConfig.ShowHitboxes and FunctionParam8 or 1;
+                    end;
+                end;
+            end;
+        end;
+    end
+});
+local PlayerTab = MainWindow:Tab({
+    Title = "Jogador", 
+    Icon = "user", 
+    Locked = false
+});
+PlayerTab:Section({
+    Title = "Giro", 
+    Icon = "shield-user"
+});
+getgenv().spinEnabled = false;
+getgenv().spinSpeed = 100;
+getgenv().modsRequireMatch = true;
+local LocalPlayer2 = game.Players.LocalPlayer;
+local SpinToggle = PlayerTab:Toggle({
+    Title = "Giro", 
+    Value = false, 
+    Callback = function(SpinParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: l_LocalPlayer_7 (ref)
+        getgenv().spinEnabled = SpinParam;
+        local CharacterModel6 = LocalPlayer2.Character;
+        if not CharacterModel6 then
+            return;
+        else
+            local RootPart7 = CharacterModel6:FindFirstChild("HumanoidRootPart");
+            if not RootPart7 then
+                return;
+            else
+                for PlayerService, LoopVariable9 in ipairs(RootPart7:GetChildren()) do
+                    if LoopVariable9.Name == "Spinning" then
+                        LoopVariable9:Destroy();
+                    end;
+                end;
+                if SpinParam and (not getgenv().modsRequireMatch or LocalPlayer2:GetAttribute("Match")) then
+                    local BodyAngularVelocity = Instance.new("BodyAngularVelocity");
+                    BodyAngularVelocity.Name = "Spinning";
+                    BodyAngularVelocity.Parent = RootPart7;
+                    BodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0);
+                    BodyAngularVelocity.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
+                end;
+                return;
+            end;
+        end;
+    end
+});
+local SpinSpeedSlider = PlayerTab:Slider({
+    Title = "Velocidade da Rotação", 
+    Step = 5, 
+    Value = {
+        Min = 10, 
+        Max = 500, 
+        Default = 100
+    }, 
+    Callback = function(SpinSpeedParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        -- upvalues: l_LocalPlayer_7 (ref)
+        getgenv().spinSpeed = tonumber(SpinSpeedParam);
+        local CharacterModel7 = LocalPlayer2.Character;
+        if not CharacterModel7 then
+            return;
+        else
+            local RootPart8 = CharacterModel7:FindFirstChild("HumanoidRootPart");
+            if not RootPart8 then
+                return;
+            else
+                local Spinning = RootPart8:FindFirstChild("Spinning");
+                if Spinning then
+                    Spinning.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
+                end;
+                return;
+            end;
+        end;
+    end
+});
+LocalPlayer2.CharacterAdded:Connect(function(SpinningParam) --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: l_LocalPlayer_7 (ref)
+    SpinningParam:WaitForChild("HumanoidRootPart");
+    task.wait(0.5);
+    local RootPart9 = SpinningParam:FindFirstChild("HumanoidRootPart");
+    if getgenv().spinEnabled and (not getgenv().modsRequireMatch or LocalPlayer2:GetAttribute("Match")) and RootPart9 then
+        for PlayerService, LoopVariable10 in ipairs(RootPart9:GetChildren()) do
+            if LoopVariable10.Name == "Spinning" then
+                LoopVariable10:Destroy();
+            end;
+        end;
+        local BodyAngularVelocity1 = Instance.new("BodyAngularVelocity");
+        BodyAngularVelocity1.Name = "Spinning";
+        BodyAngularVelocity1.Parent = RootPart9;
+        BodyAngularVelocity1.MaxTorque = Vector3.new(0, math.huge, 0);
+        BodyAngularVelocity1.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
+    end;
+end);
+PlayerTab:Section({
+    Title = "Jogador Local", 
+    Icon = "user"
+});
+local SpeedToggle = PlayerTab:Toggle({
+    Title = "Definir Velocidade", 
+    Value = false, 
+    Callback = function(SpeedParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().speedEnabled = SpeedParam;
+    end
+});
+local SpeedSlider = PlayerTab:Slider({
+    Title = "Valor da Velocidade", 
+    Step = 1, 
+    Value = {
+        Min = 16, 
+        Max = 150, 
+        Default = 16
+    }, 
+    Callback = function(SpeedParam1) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().walkSpeedValue = tonumber(SpeedParam1);
+    end
+});
+local SpeedModeDropdown = PlayerTab:Dropdown({
+    Title = "Modo de Velocidade", 
+    Values = {
+        "Normal", 
+        "Explícito"
+    }, 
+    Value = "Normal", 
+    Callback = function(SpeedModeParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().speedMode = SpeedModeParam == "Explícito" and "Blatant" or SpeedModeParam;
+    end
+});
+getgenv().speedEnabled = false;
+getgenv().walkSpeedValue = 16;
+getgenv().speedMode = "Normal";
+local PlayerService1 = game:GetService("Players");
+local RunService1 = game:GetService("RunService");
+local LocalPlayer3 = PlayerService1.LocalPlayer;
+local RunService2 = game:GetService("RunService");
+local LocalPlayer4 = game.Players.LocalPlayer;
+RunService2.RenderStepped:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
+    -- upvalues: l_LocalPlayer_9 (ref)
+    if not getgenv().modsRequireMatch or LocalPlayer4:GetAttribute("Match") then
+        if not getgenv().speedEnabled then
+            return;
+        else
+            local CharacterModel8 = LocalPlayer4.Character;
+            if not CharacterModel8 or not CharacterModel8:FindFirstChild("Humanoid") or not CharacterModel8:FindFirstChild("HumanoidRootPart") then
+                return;
+            else
+                local Humanoid = CharacterModel8.Humanoid;
+                local RootPart10 = CharacterModel8.HumanoidRootPart;
+                if getgenv().speedMode == "Normal" then
+                    Humanoid.WalkSpeed = getgenv().walkSpeedValue;
+                elseif getgenv().speedMode == "Blatant" then
+                    local MoveDirection = Humanoid.MoveDirection;
+                    if MoveDirection.Magnitude > 0 then
+                        RootPart10.CFrame = RootPart10.CFrame + MoveDirection * (getgenv().walkSpeedValue / 50);
+                    end;
+                end;
+            end;
+        end;
+    end;
+end);
+local JumpPowerToggle = PlayerTab:Toggle({
+    Title = "Definir Força do Pulo", 
+    Value = false, 
+    Callback = function(JumpPowerParam) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().jumpEnabled = JumpPowerParam;
+    end
+});
+local JumpPowerSlider = PlayerTab:Slider({
+    Title = "Força do Pulo", 
+    Step = 1, 
+    Value = {
+        Min = 50, 
+        Max = 200, 
+        Default = 50
+    }, 
+    Callback = function(JumpPowerParam1) --[[ Line: 0 ]] --[[ Name:  ]]
+        getgenv().jumpPowerValue = tonumber(JumpPowerParam1);
+    end
+});
+getgenv().jumpEnabled = false;
+getgenv().jumpPowerValue = 50;
+game:GetService("RunService").Heartbeat:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
+    if (not getgenv().modsRequireMatch or game.Players.LocalPlayer:GetAttribute("Match")) and getgenv().jumpEnabled then
+        local CharacterModel9 = game.Players.LocalPlayer.Character;
+        if CharacterModel9 and CharacterModel9:FindFirstChild("Humanoid") then
+            CharacterModel9.Humanoid.UseJumpPower = true;
+            CharacterModel9.Humanoid.JumpPower = getgenv().jumpPowerValue;
+        end;
+    end;
+end);
+
+local EquipmentTab = MainWindow:Tab({
+    Title = "Equipamentos",
+    Icon = "briefcase",
+    Locked = false
+});
+
+EquipmentTab:Section({
+    Title = "Ferramentas",
+    Icon = "wrench"
+});
+
+local TeleportToolName = "Ferramenta de Teleporte";
+local TeleportTool = nil;
+
+local function RemoveTeleportTool()
+    for _, container in ipairs({LocalPlayer.Backpack, LocalPlayer.Character}) do
+        if container then
+            local existing = container:FindFirstChild(TeleportToolName);
+            if existing then
+                existing:Destroy();
+            end;
+        end;
+    end;
+    TeleportTool = nil;
+end;
+
+local function CreateTeleportTool()
+    RemoveTeleportTool();
+
+    local tool = Instance.new("Tool");
+    tool.Name = TeleportToolName;
+    tool.ToolTip = "Clique para se teleportar";
+    tool.RequiresHandle = false;
+    tool.CanBeDropped = false;
+
+    local equippedMouse = nil;
+    local lastTouchPosition = nil;
+    local touchConnection = nil;
+
+    local function getTargetPosition()
+        if equippedMouse and equippedMouse.Hit then
+            return equippedMouse.Hit.Position;
+        end;
+
+        if lastTouchPosition and WorkspaceService.CurrentCamera then
+            local camera = WorkspaceService.CurrentCamera;
+            local ray = camera:ViewportPointToRay(lastTouchPosition.X, lastTouchPosition.Y);
+            local params = RaycastParams.new();
+            params.FilterType = Enum.RaycastFilterType.Exclude;
+            params.FilterDescendantsInstances = {LocalPlayer.Character};
+
+            local result = WorkspaceService:Raycast(ray.Origin, ray.Direction * 1000, params);
+            return result and result.Position or (ray.Origin + ray.Direction * 100);
+        end;
+
+        return nil;
+    end;
+
+    tool.Equipped:Connect(function(mouse)
+        equippedMouse = mouse;
+        lastTouchPosition = nil;
+
+        if touchConnection then
+            touchConnection:Disconnect();
+        end;
+
+        touchConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if not gameProcessed and input.UserInputType == Enum.UserInputType.Touch then
+                lastTouchPosition = input.Position;
+            end;
+        end);
+    end);
+
+    tool.Unequipped:Connect(function()
+        equippedMouse = nil;
+        lastTouchPosition = nil;
+
+        if touchConnection then
+            touchConnection:Disconnect();
+            touchConnection = nil;
+        end;
+    end);
+
+    tool.Activated:Connect(function()
+        local character = LocalPlayer.Character;
+        local root = character and character:FindFirstChild("HumanoidRootPart");
+        local targetPosition = getTargetPosition();
+
+        if root and targetPosition then
+            pcall(function()
+                root.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3, 0));
+            end);
+        end;
+    end);
+
+    tool.Parent = LocalPlayer.Backpack;
+    TeleportTool = tool;
+end;
+
+local TeleportToggle = EquipmentTab:Toggle({
+    Title = "Ferramenta de Teleporte",
+    Value = false,
+    Callback = function(enabled)
+        if enabled then
+            CreateTeleportTool();
+        else
+            RemoveTeleportTool();
+        end;
+    end
+});
+
+local FreeCamUrl = "https://raw.githubusercontent.com/josearlindodasilva07-svg/Desync/refs/heads/main/Free%20Cam";
+
+local FreeCamButton = EquipmentTab:Button({
+    Title = "Ativar Free Cam",
+    Callback = function()
+        local ok, message = pcall(function()
+            local source = game:HttpGet(FreeCamUrl);
+            local execute = loadstring(source);
+            assert(type(execute) == "function", "Não foi possível carregar o Free Cam");
+            execute();
+        end);
+
+        if not ok then
+            warn("Falha ao executar o Free Cam: " .. tostring(message));
+        end;
+    end
+});
+
+local UpdateTab = MainWindow:Tab({
+    Title = "Progresso da Atualização",
+    Icon = "bar-chart-3",
+    Locked = false
+});
+
+UpdateTab:Section({
+    Title = "Status da Atualização",
+    Icon = "upload"
+});
+
+-- Altere somente este valor no script para atualizar o progresso exibido.
+-- Exemplo: 60 = 60% concluído.
+local UpdateProgressPercentage = 0;
+UpdateProgressPercentage = math.clamp(tonumber(UpdateProgressPercentage) or 0, 0, 100);
+getgenv().updateProgress = UpdateProgressPercentage;
+
+local UpdateStatusTitle;
+if UpdateProgressPercentage <= 0 then
+    UpdateStatusTitle = "Nenhuma atualização no momento";
+elseif UpdateProgressPercentage >= 100 then
+    UpdateStatusTitle = "Atualização concluída";
+else
+    UpdateStatusTitle = "Atualização em andamento";
+end;
+
+local ProgressStatus = UpdateTab:Paragraph({
+    Title = UpdateStatusTitle,
+    Desc = "Progresso atual: " .. tostring(UpdateProgressPercentage) .. "%"
+});
+
+local ConfigManagerInstance = MainWindow.ConfigManager;
+local ConfigInstance = MainWindow.ConfigManager:CreateConfig("ToddyHub");
+ConfigInstance:Register("spinToggle", SpinToggle);
+ConfigInstance:Register("spinSpeedSlider", SpinSpeedSlider);
+ConfigInstance:Register("speedToggle", SpeedToggle);
+ConfigInstance:Register("speedSlider", SpeedSlider);
+ConfigInstance:Register("espToggle", EspToggle);
+ConfigInstance:Register("ShowToggle", ShowToggle);
+ConfigInstance:Register("SizeToggle", SizeToggle);
+ConfigInstance:Register("ColorToggle", ColorToggle);
+ConfigInstance:Register("Trans", Trans);
+ConfigInstance:Register("HitboxToggle", HitboxToggle);
+ConfigInstance:Register("jumpToggle", JumpPowerToggle);
+ConfigInstance:Register("jumpSlider", JumpPowerSlider);
+ConfigInstance:Register("speedModeDropdown", SpeedModeDropdown);
+ConfigInstance:Register("autoShootToggle", AutoShootToggle);
+ConfigInstance:Register("autoShootSpeed", AutoShootDelay);
+ConfigInstance:Register("tracersToggle", TracersToggle);
+ConfigInstance:Register("teamToggle", DisplayToggle);
+local LoadFunction = "Load";
+local ConfigReference = ConfigInstance;
+ConfigInstance[LoadFunction](ConfigReference);
+LoadFunction = "SelectTab";
+ConfigReference = MainWindow;
+MainWindow[LoadFunction](ConfigReference, 1);
