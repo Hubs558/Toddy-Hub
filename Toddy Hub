@@ -11,11 +11,26 @@ local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
 local LocalPlayer = PlayerService1.LocalPlayer;
 
-local CorrectPlaceId = 12355337193;
-if game.PlaceId ~= CorrectPlaceId then
-    LocalPlayer:Kick("Jogo incorreto. Execute este script somente no jogo correto.");
-    return;
-end;
+
+local CorrectPlaceIds = {
+    12355337193,
+    13771457545
+};
+
+local IsCorrectGame = false
+
+for _, id in ipairs(CorrectPlaceIds) do
+    if game.PlaceId == id then
+        IsCorrectGame = true
+        break
+    end
+end
+
+if not IsCorrectGame then
+    LocalPlayer:Kick("Jogo incorreto. Execute este script somente nos jogos autorizados.")
+    return
+end
+
 
 local AnimationFolder = ReplicatedStorage:WaitForChild("Animations");
 local RemoteFolder = ReplicatedStorage:WaitForChild("Remotes");
