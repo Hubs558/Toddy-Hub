@@ -986,7 +986,7 @@ UpdateTab:Section({
 
 -- Altere somente este valor no script para atualizar o progresso exibido.
 -- Exemplo: 60 = 60% concluído.
-local UpdateProgressPercentage = 30;
+local UpdateProgressPercentage = 86;
 UpdateProgressPercentage = math.clamp(tonumber(UpdateProgressPercentage) or 0, 0, 100);
 getgenv().updateProgress = UpdateProgressPercentage;
 
