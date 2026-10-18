@@ -955,10 +955,10 @@ local TeleportToggle = EquipmentTab:Toggle({
     end
 });
 
-local FreeCamUrl = "https://raw.githubusercontent.com/josearlindodasilva07-svg/Desync/refs/heads/main/Free%20Cam";
+local FreeCamUrl = "https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt";
 
 local FreeCamButton = EquipmentTab:Button({
-    Title = "Ativar Free Cam",
+    Title = "Fly",
     Callback = function()
         local ok, message = pcall(function()
             local source = game:HttpGet(FreeCamUrl);
