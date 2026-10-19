@@ -1,1031 +1,1845 @@
---[[
-	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
-]]
-local UiManager = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))();
-local ScriptUrl = "https://raw.githubusercontent.com/Wic1k/Scripts/refs/heads/main/Modules/";
-local PlayerService = game:GetService("Players");
-local ReplicatedStorage = game:GetService("ReplicatedStorage");
-local WorkspaceService = game:GetService("Workspace");
-local PlayerService1 = game:GetService("Players");
-local RunService = game:GetService("RunService");
-local UserInputService = game:GetService("UserInputService");
-local LocalPlayer = PlayerService1.LocalPlayer;
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
 
+------------------------------------------------------------
+-- CONFIG
+------------------------------------------------------------
+local TITULO = "Toddy"
+local TEMA = "cinza"       -- "roxo" (preto, branco e roxo) ou "vermelho"
+local FONT = Enum.Font.FredokaOne
+local FONT_TEXTO = Enum.Font.GothamBold -- textos das linhas/barras (como a referencia)
+local TAM_MIN = Vector2.new(400, 280)
+local TAM_MAX = Vector2.new(900, 720)
+local ICONE_ID = "rbxassetid://121287158585668" -- icone original do Toddy Hub
+local ICONE_TAM = 46
+local ICONE_MARGEM = 12
+local ICONE_ORDEM = 1000 -- DisplayOrder: maior = fica por cima das outras GUIs
 
-local CorrectPlaceIds = {
-    12355337193,
-    13771457545
-};
+-- Tipos de item:
+--   toggle   : nome, acao(ligado)
+--   dropdown : nome, desc, opcoes, padrao, id, acao(valor)
+--   multi    : nome, desc, opcoes, vazio, acao(listaDeEscolhidos)
+--   slider   : nome, desc, min, max, passo, valor, sufixo, acao(valor)
+--   botao    : nome, desc, botao, usa (id de um dropdown), acao(valorDoDropdown)
+local abas = {
+{
+nome = "Principal",
+secoes = {
+{titulo = "Combate", itens = {
+{tipo = "toggle", nome = "Remove Gun Cooldown", acao = function(on) toddySetGunCooldown(on) end},
+{tipo = "toggle", nome = "Auto Kill Gun", acao = function(on) toddyStartKillLoop("gun", on) end},
+{tipo = "botao", nome = "Kill All Gun", botao = "KILL ALL", acao = function() toddyKillOnce("gun") end},
+{tipo = "toggle", nome = "Auto Kill Knife", acao = function(on) toddyStartKillLoop("knife", on) end},
+{tipo = "botao", nome = "Kill All Knife", botao = "KILL ALL", acao = function() toddyKillOnce("knife") end},
+{tipo = "toggle", nome = "Auto Shoot", acao = function(on) toddyAutoShootSet(on) end},
+}},
+{titulo = "Hitbox", itens = {
+{tipo = "toggle", nome = "Hitbox", padrao = false, acao = function(on) toddyHitboxSet(on) end},
+{tipo = "toggle", nome = "Mostrar Hitbox", padrao = false, acao = function(on) toddyHitboxVisibleSet(on) end},
+{tipo = "slider", nome = "Hitbox Size", min = 5, max = 100, passo = 1, valor = 13, sufixo = "", acao = function(v) toddyHitboxSizeSet(v) end},
+}},
+{titulo = "Jogador", itens = {
+{tipo = "toggle", nome = "Spin", acao = function(on) toddySpinSet(on) end},
+{tipo = "toggle", nome = "Speed", acao = function(on) getgenv().toddySpeed = on end},
+{tipo = "slider", nome = "Speed Value", min = 16, max = 150, passo = 1, valor = 16, sufixo = "", acao = function(v) getgenv().toddySpeedValue = v end},
+{tipo = "toggle", nome = "Jump Power", acao = function(on) getgenv().toddyJump = on end},
+{tipo = "slider", nome = "Jump Value", min = 50, max = 200, passo = 1, valor = 50, sufixo = "", acao = function(v) getgenv().toddyJumpValue = v end},
+}},
+{titulo = "Equipamentos", itens = {
+{tipo = "botao", nome = "Fly", botao = "EXECUTAR", acao = function() toddyRunFly() end},
+}},
+},
+},
+{
+nome = "ESP",
+secoes = {
+{titulo = "ESP Toddy", itens = {
+{tipo = "toggle", nome = "ESP", padrao = true, acao = function(on) toddyEspSet(on) end},
+{tipo = "toggle", nome = "Highlight", padrao = true, acao = function(on) toddyEspHighlightSet(on) end},
+{tipo = "toggle", nome = "Nome / Billboard", padrao = true, acao = function(on) toddyEspNameSet(on) end},
+{tipo = "toggle", nome = "Linha / Tracer", padrao = true, acao = function(on) toddyEspTracerSet(on) end},
+{tipo = "toggle", nome = "Mostrar Aliados", padrao = false, acao = function(on) toddyEspTeamSet(on) end},
+{tipo = "dropdown", id = "espColor", nome = "Cor do ESP", opcoes = {"Rosa", "Verde", "Azul", "Vermelho", "Amarelo", "Ciano", "Laranja", "Roxo", "Rainbow"}, valor = "Rosa", acao = function(cor) toddyEspColorSet(cor) end},
+}},
+},
+},
+{nome = "Quick Bar", especial = "quickbar"},
+}
 
-local IsCorrectGame = false
-
-for _, id in ipairs(CorrectPlaceIds) do
-    if game.PlaceId == id then
-        IsCorrectGame = true
-        break
+------------------------------------------------------------
+-- TODDY HUB: ROTINAS ORIGINAIS ADAPTADAS A ESTA INTERFACE
+------------------------------------------------------------
+local ToddyPlayers = game:GetService("Players")
+local ToddyReplicatedStorage = game:GetService("ReplicatedStorage")
+local ToddyRunService = game:GetService("RunService")
+local ToddyWorkspace = game:GetService("Workspace")
+local ToddyPlayer = ToddyPlayers.LocalPlayer
+local ToddyRemotes = ToddyReplicatedStorage:FindFirstChild("Remotes")
+local ToddyShootGun = ToddyRemotes and ToddyRemotes:FindFirstChild("ShootGun")
+local ToddyThrowHit = ToddyRemotes and ToddyRemotes:FindFirstChild("ThrowHit")
+getgenv().remove_gun_cooldown = false
+getgenv().autoKillGun = false
+getgenv().autoKillKnife = false
+local ToddyCooldowns = {}
+local function toddyIsEnemy(plr)
+    return plr ~= ToddyPlayer and (not ToddyPlayer.Team or not plr.Team or plr.Team ~= ToddyPlayer.Team)
+end
+local function toddyRoot(plr)
+    local c = plr and plr.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+getgenv().modsRequireMatch = true
+local function toddyInMatch()
+    return not getgenv().modsRequireMatch or ToddyPlayer:GetAttribute("Match")
+end
+function toddySetGunCooldown(enabled)
+    getgenv().remove_gun_cooldown = enabled
+    if enabled then
+        ToddyCooldowns = {}
+        task.spawn(function()
+            while getgenv().remove_gun_cooldown do
+                if not toddyInMatch() then task.wait(0.2) continue end
+                for _, container in ipairs({ToddyPlayer:FindFirstChild("Backpack"), ToddyPlayer.Character}) do
+                    if container then
+                        for _, tool in ipairs(container:GetChildren()) do
+                            if tool:IsA("Tool") and tool:FindFirstChild("Fire") then
+                                if ToddyCooldowns[tool] == nil then ToddyCooldowns[tool] = tool:GetAttribute("Cooldown") end
+                                tool:SetAttribute("Cooldown", 0)
+                            end
+                        end
+                    end
+                end
+                task.wait(0.1)
+            end
+        end)
+    else
+        for tool, cooldown in pairs(ToddyCooldowns) do if tool and tool.Parent then tool:SetAttribute("Cooldown", cooldown) end end
+        ToddyCooldowns = {}
     end
 end
-
-if not IsCorrectGame then
-    LocalPlayer:Kick("Jogo incorreto. Execute este script somente nos jogos autorizados.")
-    return
+function toddyFireAt(root)
+    local origin = toddyRoot(ToddyPlayer)
+    if ToddyShootGun and origin and root then pcall(function() ToddyShootGun:FireServer(origin.Position, root.Position, root, root.Position) end) end
 end
-
-
-local AnimationFolder = ReplicatedStorage:WaitForChild("Animations");
-local RemoteFolder = ReplicatedStorage:WaitForChild("Remotes");
-local ModuleFolder = ReplicatedStorage:WaitForChild("Modules");
-local ShootAnimation = AnimationFolder:WaitForChild("Shoot");
-local ShootGunRemote = RemoteFolder:WaitForChild("ShootGun");
-local BulletRenderer = require(ModuleFolder:WaitForChild("BulletRenderer"));
-local GunConfig = {
-    GUN = "Gun_Equip"
-};
-local MaxDistance = 250;
-getgenv().aimConfig = {
-    MAX_DISTANCE = 250, 
-    MAX_VELOCITY = 40, 
-    VISIBLE_PARTS = 4, 
-    CAMERA_CAST = true, 
-    FOV_CHECK = true, 
-    REACTION_TIME = 0.01, 
-    ACTION_TIME = 0.3, 
-    AUTO_EQUIP = false, 
-    EQUIP_LOOP = 0.3, 
-    NATIVE_UI = true, 
-    DEVIATION_ENABLED = true, 
-    BASE_DEVIATION = 2.05, 
-    DISTANCE_FACTOR = 0.6, 
-    VELOCITY_FACTOR = 0.9, 
-    ACCURACY_BUILDUP = 0.14, 
-    MIN_DEVIATION = 1, 
-    RAYCAST_DISTANCE = 1000
-};
-getgenv().killButton = {
-    gun = false, 
-    knife = false
-};
-getgenv().killLoop = {
-    gun = false, 
-    knife = false
-};
-UiManager:AddTheme({
-    Name = "Solar", 
-    Accent = "#ff9d3a", 
-    Dialog = "#2a1b0f", 
-    Outline = "#ffd8a1", 
-    Text = "#fff5e0", 
-    Placeholder = "#7a6554", 
-    Background = "#1b120c", 
-    Button = "#ff7b00", 
-    Icon = "#ffcc33"
-});
-local MainWindow = UiManager:CreateWindow({
-    Title = "Toddy Hub", 
-    Icon = "rbxassetid://121287158585668", 
-    Author = "Criado Por Godenot", 
-    Folder = "ToddyHub", 
-    Size = UDim2.fromOffset(420, 420), 
-    Transparent = false, 
-    Theme = "Dark", 
-    Resizable = true, 
-    SideBarWidth = 200, 
-    HideSearchBar = true, 
-    ScrollBarEnabled = false, 
-    CornerRadius = UDim.new(0, 14), 
-    DropShadow = true
-});
-MainWindow:EditOpenButton({
-    Title = "Toddy Hub", 
-    Icon = "rbxassetid://121287158585668", 
-    CornerRadius = UDim.new(0, 16), 
-    StrokeThickness = 2, 
-    Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromHex("#FF0F7B")), 
-        ColorSequenceKeypoint.new(1, Color3.fromHex("#F89B29"))
-    }), 
-    OnlyMobile = true, 
-    Enabled = true, 
-    Draggable = true
-});
-local Settings = {};
-loadModule = function(ScriptName) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v17 (ref), v1 (ref)
-    if Settings[ScriptName] then
-        return;
-    else
-        table.insert(Settings, ScriptName);
-        local Settings1 = Settings;
-        local LoadStatus, LoadResult = pcall(loadstring(game:HttpGet(ScriptUrl .. ScriptName)));
-        Settings1[ScriptName] = LoadResult;
-        _ = LoadStatus;
-        return;
-    end;
-end;
-local NilValue = nil;
-local NilValue1 = nil;
-lockToggle = function(ParamValue) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v22 (ref), v23 (ref)
-    if ParamValue == "knife" and NilValue and NilValue.Lock then
-        NilValue:Lock();
-        return;
-    elseif ParamValue == "gun" and NilValue1 and NilValue1.Lock then
-        NilValue1:Lock();
-        return;
-    else
-        if NilValue and NilValue.Unlock then
-            NilValue:Unlock();
-        end;
-        if NilValue1 and NilValue1.Unlock then
-            NilValue1:Unlock();
-        end;
-        return;
-    end;
-end;
-local PlayerService2 = game:GetService("Players");
-local RunService1 = game:GetService("RunService");
-local WorkspaceService1 = game:GetService("Workspace");
-local LocalPlayer1 = PlayerService2.LocalPlayer;
-local CurrentCamera = WorkspaceService1.CurrentCamera;
-local ColorValue = Color3.fromRGB(30, 214, 134);
-local ColorValue1 = Color3.fromRGB(15, 107, 67);
-local ColorValue2 = Color3.fromRGB(255, 41, 121);
-local ColorValue3 = Color3.fromRGB(127, 20, 60);
-getgenv().espEnemies = true;
-getgenv().espTeamMates = false;
-getgenv().espTracers = true;
-local TableValue2 = {};
-local function Func3() --[[ Line: 0 ]] --[[ Name:  ]]
-    local DrawingInstance = Drawing.new("Line");
-    DrawingInstance.Visible = false;
-    DrawingInstance.From = Vector2.new(0, 0);
-    DrawingInstance.To = Vector2.new(0, 0);
-    DrawingInstance.Thickness = 1.5;
-    DrawingInstance.Transparency = 0.8;
-    return DrawingInstance;
-end;
-local function Func4(ParamValue2, ParamValue3, ParamValue4, ParamValue5) --[[ Line: 0 ]] --[[ Name:  ]]
-    local HumanoidRootPart = ParamValue2:FindFirstChild("HumanoidRootPart");
-    if not HumanoidRootPart then
-        return;
-    else
-        local HighlightInstance = Instance.new("Highlight");
-        HighlightInstance.Name = "ESP_Highlight";
-        HighlightInstance.OutlineColor = ParamValue4;
-        HighlightInstance.FillColor = ParamValue5;
-        HighlightInstance.FillTransparency = 0.7;
-        HighlightInstance.Parent = ParamValue2;
-        local BillboardGui = Instance.new("BillboardGui");
-        BillboardGui.AlwaysOnTop = true;
-        BillboardGui.Size = UDim2.new(0, 200, 0, 50);
-        BillboardGui.StudsOffset = Vector3.new(0, 3, 0);
-        BillboardGui.Name = "ESP_Label";
-        BillboardGui.Adornee = HumanoidRootPart;
-        BillboardGui.Parent = HumanoidRootPart;
-        local TextLabel = Instance.new("TextLabel");
-        TextLabel.BackgroundTransparency = 1;
-        TextLabel.Text = ParamValue3.Name;
-        TextLabel.TextColor3 = Color3.new(1, 1, 1);
-        TextLabel.TextStrokeTransparency = 0;
-        TextLabel.Font = Enum.Font.Ubuntu;
-        TextLabel.TextSize = 14;
-        TextLabel.Size = UDim2.new(1, 0, 1, 0);
-        TextLabel.Parent = BillboardGui;
-        return HighlightInstance, BillboardGui;
-    end;
-end;
-local function Function(Parameter) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v93 (ref)
-    if TableValue2[Parameter] then
-        local Orb = TableValue2[Parameter];
-        do
-            local Orb1 = Orb;
-            if Orb1.tracer then
-                pcall(function() --[[ Line: 0 ]] --[[ Name:  ]]
-                    -- upvalues: l_v106_0 (ref)
-                    Orb1.tracer:Remove();
-                end);
-            end;
-            if Orb1.highlight then
-                Orb1.highlight:Destroy();
-            end;
-            if Orb1.billboard then
-                Orb1.billboard:Destroy();
-            end;
-            TableValue2[Parameter] = nil;
-        end;
-    end;
-end;
-local function Func1(TeamMember) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: l_LocalPlayer_2 (ref), v89 (ref), v91 (ref), v90 (ref), v92 (ref), v104 (ref), v95 (ref), v93 (ref), v108 (ref)
-    TeamMember.CharacterAdded:Connect(function(TeamMember1) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v109 (ref), l_LocalPlayer_2 (ref), v89 (ref), v91 (ref), v90 (ref), v92 (ref), v104 (ref), v95 (ref), v93 (ref)
-        TeamMember1:WaitForChild("HumanoidRootPart");
-        task.wait(0.2);
-        local TeamCheck = TeamMember.Team == LocalPlayer1.Team;
-        local Condition = TeamCheck and ColorValue or ColorValue2;
-        local Condition1 = TeamCheck and ColorValue1 or ColorValue3;
-        local Result, Result1 = Func4(TeamMember1, TeamMember, Condition, Condition1);
-        local Func2 = Func3();
-        TableValue2[TeamMember] = {
-            tracer = Func2, 
-            highlight = Result, 
-            billboard = Result1, 
-            character = TeamMember1
-        };
-    end);
-    TeamMember.CharacterRemoving:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v108 (ref), v109 (ref)
-        Function(TeamMember);
-    end);
-end;
-for PlayerService, LoopVariable in pairs(PlayerService2:GetPlayers()) do
-    if LoopVariable ~= LocalPlayer1 then
-        Func1(LoopVariable);
-    end;
-end;
-PlayerService2.PlayerAdded:Connect(function(Parameter1) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: l_LocalPlayer_2 (ref), v117 (ref)
-    if Parameter1 ~= LocalPlayer1 then
-        Func1(Parameter1);
-    end;
-end);
-PlayerService2.PlayerRemoving:Connect(Function);
-RunService1.RenderStepped:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v93 (ref), l_LocalPlayer_2 (ref), l_CurrentCamera_0 (ref), v89 (ref), v91 (ref)
-    for LoopVariable1, LoopVariable2 in pairs(TableValue2) do
-        local CharacterModel = LoopVariable2.character;
-        local CharacterCheck = CharacterModel and CharacterModel:FindFirstChild("HumanoidRootPart");
-        local LocalCharacter = LocalPlayer1.Character and LocalPlayer1.Character:FindFirstChild("HumanoidRootPart");
-        local TeamCheck1 = LoopVariable1.Team == LocalPlayer1.Team;
-        if (not getgenv().espEnemies or TeamCheck1) and (not getgenv().espTeamMates or not TeamCheck1) or not CharacterCheck or not LocalCharacter then
-            LoopVariable2.tracer.Visible = false;
-            if LoopVariable2.highlight then
-                LoopVariable2.highlight.Enabled = false;
-            end;
-            if LoopVariable2.billboard then
-                LoopVariable2.billboard.Enabled = false;
-            end;
-        else
-            if LoopVariable2.highlight then
-                LoopVariable2.highlight.Enabled = true;
-            end;
-            if LoopVariable2.billboard then
-                LoopVariable2.billboard.Enabled = true;
-            end;
-            if getgenv().espTracers and CurrentCamera then
-                local Distance = (LocalCharacter.Position - CharacterCheck.Position).Magnitude;
-                local RangeCheck = (getgenv().espTracerRange or 0) > 0 and Distance <= getgenv().espTracerRange;
-                local ViewportPoint, ViewportPoint1 = CurrentCamera:WorldToViewportPoint(CharacterCheck.Position);
-                if ViewportPoint1 and RangeCheck then
-                    LoopVariable2.tracer.Visible = true;
-                    LoopVariable2.tracer.From = Vector2.new(CurrentCamera.ViewportSize.X / 2, CurrentCamera.ViewportSize.Y);
-                    LoopVariable2.tracer.To = Vector2.new(ViewportPoint.X, ViewportPoint.Y);
-                    LoopVariable2.tracer.Color = TeamCheck1 and ColorValue or ColorValue2;
-                else
-                    LoopVariable2.tracer.Visible = false;
-                end;
-            else
-                LoopVariable2.tracer.Visible = false;
-            end;
-        end;
-    end;
-end);
--- Auto Shot helpers: kept separate from the removed Kill All features.
-local AutoShotRaycastParams = RaycastParams.new()
-AutoShotRaycastParams.IgnoreWater = true
-AutoShotRaycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-local function AutoShotFindTool(animationName)
-    local character = LocalPlayer and LocalPlayer.Character
-    if not character then return nil end
-    local fallback
-    for _, item in ipairs(character:GetChildren()) do
-        if item:IsA("Tool") then
-            if item:GetAttribute("EquipAnimation") == animationName then
-                return item
-            end
-            if not fallback and item:FindFirstChild("Muzzle", true) then
-                fallback = item
+function toddyKnifeAt(root)
+    if ToddyThrowHit and root then pcall(function() ToddyThrowHit:FireServer(root, root.Position) end) end
+end
+function toddyKillOnce(kind)
+    if not toddyInMatch() then return end
+    for _, plr in ipairs(ToddyPlayers:GetPlayers()) do
+        if toddyIsEnemy(plr) then
+            local root = toddyRoot(plr)
+            local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+            if root and (not hum or hum.Health > 0) then
+                if kind == "knife" then toddyKnifeAt(root) else toddyFireAt(root) end
+                task.wait(0.1)
             end
         end
     end
+end
+function toddyStartKillLoop(kind, enabled)
+    if kind == "knife" then getgenv().autoKillKnife = enabled else getgenv().autoKillGun = enabled end
+    if enabled then task.spawn(function()
+        while (kind == "knife" and getgenv().autoKillKnife) or (kind == "gun" and getgenv().autoKillGun) do
+            toddyKillOnce(kind); task.wait(0.1)
+        end
+    end) end
+end
+
+-- ESP original: Highlight, name Billboard e tracers Drawing.
+local EspPlayers = ToddyPlayers
+local EspRunService = ToddyRunService
+local EspWorkspace = ToddyWorkspace
+local EspLocalPlayer = ToddyPlayer
+local EspCamera = EspWorkspace.CurrentCamera
+local EspTeamColor = Color3.fromRGB(150, 150, 150)
+local EspTeamDark = Color3.fromRGB(75, 75, 75)
+local EspEnemyColor = Color3.fromRGB(114, 114, 114)
+local EspEnemyDark = Color3.fromRGB(57, 57, 57)
+local EspObjects = {}
+getgenv().espEnemies = true
+getgenv().espTeamMates = false
+getgenv().espTracers = true
+getgenv().espTracerRange = 300
+getgenv().toddyEspHighlight = true
+getgenv().toddyEspName = true
+getgenv().toddyEspRainbow = false
+local EspColorName = "Rosa"
+local function espTracer()
+    local d = Drawing.new("Line")
+    d.Visible = false; d.From = Vector2.new(0,0); d.To = Vector2.new(0,0); d.Thickness = 1.5; d.Transparency = 0.8
+    return d
+end
+local function espCreate(character, playerObject, outline, fill)
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local oldHighlight = character:FindFirstChild("ESP_Highlight")
+    if oldHighlight then oldHighlight:Destroy() end
+    local h = Instance.new("Highlight")
+    h.Name = "ESP_Highlight"
+    h.Adornee = character
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.OutlineColor = outline
+    h.FillColor = fill
+    h.OutlineTransparency = 0
+    h.FillTransparency = 0.65
+    h.Parent = character
+    local b = Instance.new("BillboardGui")
+    b.AlwaysOnTop = true; b.Size = UDim2.new(0,200,0,50); b.StudsOffset = Vector3.new(0,3,0); b.Name = "ESP_Label"; b.Adornee = root; b.Parent = root
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1; label.Text = playerObject.Name; label.TextColor3 = Color3.new(1,1,1); label.TextStrokeTransparency = 0; label.Font = Enum.Font.Ubuntu; label.TextSize = 14; label.Size = UDim2.new(1,0,1,0); label.Parent = b
+    return h,b
+end
+local function espRemove(plr)
+    local o=EspObjects[plr]
+    if o then pcall(function() o.tracer:Remove() end); if o.highlight then o.highlight:Destroy() end; if o.billboard then o.billboard:Destroy() end; EspObjects[plr]=nil end
+end
+local function espAttach(plr)
+    plr.CharacterAdded:Connect(function(char)
+        char:WaitForChild("HumanoidRootPart"); task.wait(0.2); espRemove(plr)
+        local same = plr.Team ~= nil and EspLocalPlayer.Team ~= nil and plr.Team == EspLocalPlayer.Team
+        local h,b = espCreate(char,plr,same and EspTeamColor or EspEnemyColor,same and EspTeamDark or EspEnemyDark)
+        if h then EspObjects[plr]={tracer=espTracer(),highlight=h,billboard=b,character=char} end
+    end)
+    plr.CharacterRemoving:Connect(function() espRemove(plr) end)
+    if plr.Character then
+        task.spawn(function()
+            plr.Character:WaitForChild("HumanoidRootPart");
+            local same=plr.Team ~= nil and EspLocalPlayer.Team ~= nil and plr.Team==EspLocalPlayer.Team; local h,b=espCreate(plr.Character,plr,same and EspTeamColor or EspEnemyColor,same and EspTeamDark or EspEnemyDark)
+            if h then EspObjects[plr]={tracer=espTracer(),highlight=h,billboard=b,character=plr.Character} end
+        end)
+    end
+end
+for _,plr in ipairs(EspPlayers:GetPlayers()) do if plr~=EspLocalPlayer then espAttach(plr) end end
+EspPlayers.PlayerAdded:Connect(function(plr) if plr~=EspLocalPlayer then espAttach(plr) end end)
+EspPlayers.PlayerRemoving:Connect(espRemove)
+EspRunService.RenderStepped:Connect(function()
+    for plr,o in pairs(EspObjects) do
+        local char=o.character; local root=char and char:FindFirstChild("HumanoidRootPart"); local localRoot=EspLocalPlayer.Character and EspLocalPlayer.Character:FindFirstChild("HumanoidRootPart"); local same=plr.Team ~= nil and EspLocalPlayer.Team ~= nil and plr.Team==EspLocalPlayer.Team
+        if not toddyInMatch() or (not getgenv().espEnemies and not same) or (not getgenv().espTeamMates and same) or not root or not localRoot then
+            o.tracer.Visible=false; if o.highlight then o.highlight.Enabled=false end; if o.billboard then o.billboard.Enabled=false end
+        else
+            local currentEspColor=getgenv().toddyEspRainbow and Color3.fromHSV((os.clock()%4)/4,1,1) or EspEnemyColor
+            if o.highlight then o.highlight.Enabled=getgenv().toddyEspHighlight; if not same then o.highlight.FillColor=currentEspColor; o.highlight.OutlineColor=currentEspColor end end; if o.billboard then o.billboard.Enabled=getgenv().toddyEspName end
+            local cam=workspace.CurrentCamera or EspCamera
+            if getgenv().espTracers and cam then
+                local dist=(localRoot.Position-root.Position).Magnitude; local p,on=cam:WorldToViewportPoint(root.Position)
+                if on and (getgenv().espTracerRange or 0)>0 and dist<=getgenv().espTracerRange then
+                    o.tracer.Visible=true; o.tracer.From=Vector2.new(cam.ViewportSize.X/2,cam.ViewportSize.Y); o.tracer.To=Vector2.new(p.X,p.Y); o.tracer.Color=getgenv().toddyEspRainbow and Color3.fromHSV((os.clock()%4)/4,1,1) or (same and EspTeamColor or EspEnemyColor)
+                else o.tracer.Visible=false end
+            else o.tracer.Visible=false end
+        end
+    end
+end)
+function toddyEspSet(enabled) getgenv().espEnemies=enabled end
+function toddyEspTeamSet(enabled) getgenv().espTeamMates=enabled end
+function toddyEspHighlightSet(enabled)
+    getgenv().toddyEspHighlight=enabled
+    for _,o in pairs(EspObjects) do
+        if o.highlight then o.highlight.Enabled=enabled end
+    end
+end
+function toddyEspNameSet(enabled)
+    getgenv().toddyEspName=enabled
+    for _,o in pairs(EspObjects) do if o.billboard then o.billboard.Enabled=enabled end end
+end
+function toddyEspTracerSet(enabled) getgenv().espTracers=enabled end
+function toddyEspColorSet(name)
+    EspColorName=name
+    getgenv().toddyEspRainbow=(name=="Rainbow")
+    local color, dark = EspEnemyColor, EspEnemyDark
+    if name=="Rosa" then color=Color3.fromRGB(255,41,121); dark=Color3.fromRGB(127,20,60)
+    elseif name=="Verde" then color=Color3.fromRGB(30,214,134); dark=Color3.fromRGB(15,107,67)
+    elseif name=="Azul" then color=Color3.fromRGB(70,150,255); dark=Color3.fromRGB(25,65,150)
+    elseif name=="Vermelho" then color=Color3.fromRGB(255,60,60); dark=Color3.fromRGB(130,20,20)
+    elseif name=="Amarelo" then color=Color3.fromRGB(255,220,40); dark=Color3.fromRGB(150,110,10)
+    elseif name=="Ciano" then color=Color3.fromRGB(40,240,240); dark=Color3.fromRGB(10,130,150)
+    elseif name=="Laranja" then color=Color3.fromRGB(255,140,30); dark=Color3.fromRGB(160,65,10)
+    elseif name=="Roxo" then color=Color3.fromRGB(180,70,255); dark=Color3.fromRGB(90,20,150) end
+    EspEnemyColor=color; EspEnemyDark=dark
+    for _,o in pairs(EspObjects) do
+        if o.highlight then o.highlight.FillColor=color; o.highlight.OutlineColor=color end
+    end
+end
+
+-- Auto Shot original: procura a arma pelo EquipAnimation, Muzzle e linha de visao.
+local AutoReplicated = ToddyReplicatedStorage
+local AutoAnimations = AutoReplicated:WaitForChild("Animations")
+local AutoRemotes = AutoReplicated:WaitForChild("Remotes")
+local AutoModules = AutoReplicated:WaitForChild("Modules")
+local AutoShootAnimation = AutoAnimations:WaitForChild("Shoot")
+local AutoShootRemote = AutoRemotes:WaitForChild("ShootGun")
+local AutoBulletRenderer = require(AutoModules:WaitForChild("BulletRenderer"))
+local AutoMaxDistance = 250
+local AutoGunConfig = {GUN="Gun_Equip"}
+local AutoRaycast = RaycastParams.new(); AutoRaycast.IgnoreWater=true; AutoRaycast.FilterType=Enum.RaycastFilterType.Blacklist
+local function autoFindTool(animationName)
+    local character=EspLocalPlayer.Character; if not character then return nil end
+    local fallback
+    for _,item in ipairs(character:GetChildren()) do if item:IsA("Tool") then if item:GetAttribute("EquipAnimation")==animationName then return item end; if not fallback and item:FindFirstChild("Muzzle",true) then fallback=item end end end
     return fallback
 end
-
-local function AutoShotHasLineOfSight(targetPart, origin)
-    local character = LocalPlayer and LocalPlayer.Character
-    if not character or not targetPart then return false end
-    AutoShotRaycastParams.FilterDescendantsInstances = {character}
-    local direction = targetPart.Position - origin
-    if direction.Magnitude <= 0 then return true end
-    local hit = WorkspaceService:Raycast(origin, direction.Unit * direction.Magnitude, AutoShotRaycastParams)
-    return not hit or hit.Instance:IsDescendantOf(targetPart.Parent)
+local function autoHasLine(targetPart,origin)
+    local character=EspLocalPlayer.Character; if not character or not targetPart then return false end
+    AutoRaycast.FilterDescendantsInstances={character}; local direction=targetPart.Position-origin; if direction.Magnitude<=0 then return true end
+    local hit=ToddyWorkspace:Raycast(origin,direction.Unit*direction.Magnitude,AutoRaycast); return not hit or hit.Instance:IsDescendantOf(targetPart.Parent)
+end
+local function autoFindTarget(originPart)
+    local closest,root; local best=AutoMaxDistance+1; local gun=autoFindTool(AutoGunConfig.GUN); if not gun then return nil,nil end; if not gun:FindFirstChild("Muzzle",true) then return nil,nil end
+    for _,candidate in ipairs(EspPlayers:GetPlayers()) do if candidate~=EspLocalPlayer and candidate.Character and candidate.Character.Parent and (not candidate.Team or not EspLocalPlayer.Team or candidate.Team~=EspLocalPlayer.Team) then local hum=candidate.Character:FindFirstChildOfClass("Humanoid"); local r=candidate.Character:FindFirstChild("HumanoidRootPart"); if hum and hum.Health>0 and r then local d=(r.Position-originPart.Position).Magnitude; if d<best and d<=AutoMaxDistance then best=d;closest=candidate;root=r end end end end
+    return closest,root
+end
+local function autoFire(targetRoot,animator)
+    local gun=autoFindTool(AutoGunConfig.GUN); if not gun or not targetRoot or not targetRoot:IsDescendantOf(ToddyWorkspace) then return end; local muzzle=gun:FindFirstChild("Muzzle",true); if not muzzle then return end
+    local origin=muzzle.WorldPosition; local pos=targetRoot.Position+Vector3.new(0,2,0); if animator and AutoShootAnimation then pcall(function() animator:LoadAnimation(AutoShootAnimation):Play() end) end; local sound=gun:FindFirstChild("Fire"); if sound then pcall(function() sound:Play() end) end; if AutoBulletRenderer then pcall(AutoBulletRenderer,origin,pos,"Default") end
+    if autoHasLine(targetRoot,origin) and AutoShootRemote then pcall(function() AutoShootRemote:FireServer(origin,pos,targetRoot,pos) end) end
+end
+local AutoShotConnection
+function toddyAutoShootSet(enabled)
+    if AutoShotConnection then AutoShotConnection:Disconnect(); AutoShotConnection=nil end
+    if enabled then AutoShotConnection=ToddyRunService.Heartbeat:Connect(function()
+        if not toddyInMatch() then return end
+        local char=EspLocalPlayer.Character; local root=char and char:FindFirstChild("HumanoidRootPart"); local hum=char and char:FindFirstChildOfClass("Humanoid"); local animator=hum and hum:FindFirstChild("Animator"); if not root or not hum or not animator then return end; local _,target=autoFindTarget(root); if target then pcall(autoFire,target,animator) end
+    end) end
 end
 
-local function AutoShotFindTarget(originPart)
-    local closestPlayer, closestRoot
-    local bestDistance = MaxDistance + 1
-    local gun = AutoShotFindTool(GunConfig.GUN)
-    if not gun then return nil, nil end
-    local muzzle = gun:FindFirstChild("Muzzle", true)
-    if not muzzle then return nil, nil end
-    for _, candidate in ipairs(PlayerService1:GetPlayers()) do
-        if candidate ~= LocalPlayer and candidate.Character and candidate.Character.Parent
-            and (not candidate.Team or not LocalPlayer.Team or candidate.Team ~= LocalPlayer.Team) then
-            local character = candidate.Character
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            local root = character:FindFirstChild("HumanoidRootPart")
-            if humanoid and humanoid.Health > 0 and root then
-                local distance = (root.Position - originPart.Position).Magnitude
-                if distance < bestDistance and distance <= MaxDistance then
-                    bestDistance = distance
-                    closestPlayer, closestRoot = candidate, root
-                end
-            end
-        end
-    end
-    return closestPlayer, closestRoot
+-- Hitbox original: guarda e restaura Size/Transparency/Color/CanCollide.
+local HitPlayers=ToddyPlayers; local HitLocal=ToddyPlayer
+local HitConfig={Enabled=false,ShowHitboxes=false,Size=5,Color=Color3.fromRGB(255, 60, 60),Transparency=0.5}; local HitOriginal={}; local HitLoop
+local function hitApply(plr)
+    if plr==HitLocal or (HitLocal.Team and plr.Team and plr.Team==HitLocal.Team) then return end; local c=plr.Character; local root=c and c:FindFirstChild("HumanoidRootPart"); if not root then return end
+    if not HitOriginal[plr] then HitOriginal[plr]={Size=root.Size,Transparency=root.Transparency,Color=root.Color,CanCollide=root.CanCollide} end
+    root.Size=Vector3.new(HitConfig.Size,HitConfig.Size,HitConfig.Size); root.CanCollide=false; root.Transparency=HitConfig.ShowHitboxes and HitConfig.Transparency or 1; root.Color=HitConfig.Color
 end
-
-local function AutoShotFire(targetRoot, animator)
-    local gun = AutoShotFindTool(GunConfig.GUN)
-    if not gun or not targetRoot or not targetRoot:IsDescendantOf(WorkspaceService) then return end
-    local muzzle = gun:FindFirstChild("Muzzle", true)
-    if not muzzle then return end
-    local origin = muzzle.WorldPosition
-    local targetPosition = targetRoot.Position + Vector3.new(0, 2, 0)
-    if animator and ShootAnimation then pcall(function() animator:LoadAnimation(ShootAnimation):Play() end) end
-    local fireSound = gun:FindFirstChild("Fire")
-    if fireSound then pcall(function() fireSound:Play() end) end
-    if BulletRenderer then pcall(BulletRenderer, origin, targetPosition, "Default") end
-    if AutoShotHasLineOfSight(targetRoot, origin) and ShootGunRemote then
-        pcall(function() ShootGunRemote:FireServer(origin, targetPosition, targetRoot, targetPosition) end)
+local function hitRestore()
+    for plr,old in pairs(HitOriginal) do local root=HitPlayers and toddyRoot(plr); if root then root.Size=old.Size;root.Transparency=old.Transparency;root.Color=old.Color;root.CanCollide=old.CanCollide end end; HitOriginal={}
+end
+function toddyHitboxSet(enabled)
+    HitConfig.Enabled=enabled
+    if HitLoop then HitLoop=false end
+    if enabled then HitLoop=true; task.spawn(function() while HitLoop and HitConfig.Enabled do if toddyInMatch() then for _,plr in ipairs(HitPlayers:GetPlayers()) do hitApply(plr) end else hitRestore() end; task.wait(0.1) end; hitRestore() end) else hitRestore() end
+end
+function toddyHitboxSizeSet(v) HitConfig.Size=tonumber(v) or HitConfig.Size end
+function toddyHitboxVisibleSet(enabled)
+    HitConfig.ShowHitboxes=enabled
+    for plr in pairs(HitOriginal) do
+        local root=toddyRoot(plr)
+        if root then root.Transparency=enabled and HitConfig.Transparency or 1 end
     end
 end
 
-local RageTab = MainWindow:Tab({
-    Title = "Fúria", 
-    Icon = "skull", 
-    Locked = false
-});
-RageTab:Section({
-    Title = "Disparo Automático", 
-    Icon = "crosshair"
-});
-local Value = 0.1;
-local NilValue2 = nil;
-local AutoShootToggle = RageTab:Toggle({
-    Title = "Disparo Automático", 
-    Callback = function(AutoShootParameter) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v201 (ref), l_RunService_0 (ref), v200 (ref), l_LocalPlayer_1 (ref), v191 (ref), v199 (ref)
-        if AutoShootParameter and not NilValue2 then
-            local InitialValue = 0;
-            do
-                local InitialValue1 = InitialValue;
-                NilValue2 = RunService.Heartbeat:Connect(function(Parameter10) --[[ Line: 0 ]] --[[ Name:  ]]
-                    -- upvalues: l_v203_0 (ref), v200 (ref), l_LocalPlayer_1 (ref), v191 (ref), v199 (ref)
-                    InitialValue1 = InitialValue1 + Parameter10;
-                    if InitialValue1 < Value then
-                        return;
-                    else
-                        InitialValue1 = 0;
-                        local CharacterModel4 = LocalPlayer.Character;
-                        if not CharacterModel4 then
-                            return;
-                        else
-                            local HumanoidRootPart2 = CharacterModel4:FindFirstChild("HumanoidRootPart");
-                            local HumanoidObject = CharacterModel4:FindFirstChild("Humanoid");
-                            local HumanoidComponent = HumanoidObject and HumanoidObject:FindFirstChild("Animator");
-                            if not HumanoidRootPart2 or not HumanoidObject or not HumanoidComponent then
-                                return;
-                            else
-                                local RootPartParam, RootPartValue = AutoShotFindTarget(HumanoidRootPart2);
-                                if RootPartParam and RootPartValue then
-                                    pcall(AutoShotFire, RootPartValue, HumanoidComponent);
-                                end;
-                                return;
-                            end;
-                        end;
-                    end;
-                end);
-            end;
-        elseif not AutoShootParameter and NilValue2 then
-            NilValue2:Disconnect();
-            NilValue2 = nil;
-        end;
-    end
-});
-local AutoShootDelay = RageTab:Slider({
-    Title = "Atraso do Disparo Automático", 
-    Step = 0.01, 
-    Value = {
-        Min = 0.1, 
-        Max = 0.3, 
-        Default = Value
-    }, 
-    Callback = function(FunctionParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v200 (ref)
-        Value = tonumber(FunctionParam);
-    end
-});
+-- Player helpers and original Fly loader.
+function toddySpinSet(enabled)
+    if not toddyInMatch() then enabled=false end
+    local root=toddyRoot(ToddyPlayer); if not root then return end; local old=root:FindFirstChild("ToddySpinning"); if old then old:Destroy() end; if enabled then local spin=Instance.new("BodyAngularVelocity");spin.Name="ToddySpinning";spin.MaxTorque=Vector3.new(0,math.huge,0);spin.AngularVelocity=Vector3.new(0,10,0);spin.Parent=root end
+end
+function toddyRunFly()
+    if not toddyInMatch() then return end
+    local ok,message=pcall(function() local source=game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"); local execute=loadstring(source); assert(type(execute)=="function","Nao foi possivel carregar o Free Cam"); execute() end)
+    if not ok then warn("Falha ao executar o Free Cam: "..tostring(message)) end
+end
+ToddyRunService.Heartbeat:Connect(function()
+    if not toddyInMatch() then return end
+    local c=ToddyPlayer.Character; local hum=c and c:FindFirstChildOfClass("Humanoid")
+    if hum and getgenv().toddySpeed then hum.WalkSpeed=tonumber(getgenv().toddySpeedValue) or 16 end
+    if hum and getgenv().toddyJump then hum.UseJumpPower=true;hum.JumpPower=tonumber(getgenv().toddyJumpValue) or 50 end
+end)
 
-local EspTab = MainWindow:Tab({
-    Title = "Visualização", 
-    Icon = "eye", 
-    Locked = false
-});
-EspTab:Section({
-    Title = "Visualização", 
-    Icon = "eye"
-});
-local EspToggle = EspTab:Toggle({
-    Title = "Visualização", 
-    Value = true, 
-    Callback = function(EspParameter) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().espEnemies = EspParameter;
-    end
-});
-EspTab:Section({
-    Title = "Configurações", 
-    Icon = "settings"
-});
-local DisplayToggle = EspTab:Toggle({
-    Title = "Exibir Equipe", 
-    Value = false, 
-    Callback = function(DisplayParameter) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().espTeamMates = DisplayParameter;
-    end
-});
-local TracersToggle = EspTab:Toggle({
-    Title = "Rastros", 
-    Value = true, 
-    Callback = function(TracersParameter) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().espTracers = TracersParameter;
-        getgenv().espTracerRange = TracersParameter and 300 or 0;
-    end
-});
-local HitboxTab = MainWindow:Tab({
-    Title = "Áreas de Acerto", 
-    Icon = "swords", 
-    Locked = false
-});
-local PlayerService = game:GetService("Players");
-local RunService = game:GetService("RunService");
-local LocalPlayer = PlayerService.LocalPlayer;
-local HitboxConfig = {
-    Enabled = false, 
-    ShowHitboxes = false, 
-    Size = 5, 
-    Color = Color3.fromRGB(255, 0, 0), 
-    Transparency = 0.5
-};
-local EmptyConfig = {};
-local function LocalFunction() --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref), v220 (ref)
-    while HitboxConfig.Enabled do
-        wait(0.1);
-        for PlayerService, LoopVariable in pairs(PlayerService:GetPlayers()) do
-            if LoopVariable ~= LocalPlayer and LoopVariable.Team ~= LocalPlayer.Team then
-                local CharacterModel = LoopVariable.Character;
-                if CharacterModel then
-                    local RootPart = CharacterModel:FindFirstChild("HumanoidRootPart");
-                    if RootPart then
-                        if not EmptyConfig[LoopVariable] then
-                            EmptyConfig[LoopVariable] = {
-                                Size = RootPart.Size, 
-                                Transparency = RootPart.Transparency, 
-                                Color = RootPart.Color
-                            };
-                        end;
-                        RootPart.Size = Vector3.new(HitboxConfig.Size, HitboxConfig.Size, HitboxConfig.Size);
-                        RootPart.CanCollide = false;
-                        RootPart.Transparency = HitboxConfig.ShowHitboxes and HitboxConfig.Transparency or 1;
-                        RootPart.Color = HitboxConfig.Color;
-                    end;
-                end;
-            end;
-        end;
-    end;
-    for PlayerService, LoopVariable1 in pairs(PlayerService:GetPlayers()) do
-        if LoopVariable1 ~= LocalPlayer and LoopVariable1.Team ~= LocalPlayer.Team then
-            local CharacterModel1 = LoopVariable1.Character;
-            if CharacterModel1 then
-                local RootPart1 = CharacterModel1:FindFirstChild("HumanoidRootPart");
-                if RootPart1 and EmptyConfig[LoopVariable1] then
-                    RootPart1.Size = EmptyConfig[LoopVariable1].Size;
-                    RootPart1.Transparency = EmptyConfig[LoopVariable1].Transparency;
-                    RootPart1.Color = EmptyConfig[LoopVariable1].Color;
-                    RootPart1.CanCollide = false;
-                end;
-            end;
-        end;
-    end;
-    EmptyConfig = {};
-end;
-local function LocalFunction1(FunctionParam1) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: v219 (ref), l_LocalPlayer_5 (ref), v220 (ref)
-    FunctionParam1.CharacterAdded:Connect(function(FunctionParam2) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), v230 (ref), l_LocalPlayer_5 (ref), v220 (ref)
-        if HitboxConfig.Enabled then
-            local RootPart2 = FunctionParam2:FindFirstChild("HumanoidRootPart");
-            if RootPart2 and FunctionParam1 ~= LocalPlayer and FunctionParam1.Team ~= LocalPlayer.Team then
-                EmptyConfig[FunctionParam1] = {
-                    Size = RootPart2.Size, 
-                    Transparency = RootPart2.Transparency, 
-                    Color = RootPart2.Color
-                };
-                RootPart2.Size = Vector3.new(HitboxConfig.Size, HitboxConfig.Size, HitboxConfig.Size);
-                RootPart2.CanCollide = false;
-                RootPart2.Transparency = HitboxConfig.ShowHitboxes and HitboxConfig.Transparency or 1;
-                RootPart2.Color = HitboxConfig.Color;
-            end;
-        end;
-    end);
-end;
-HitboxTab:Section({
-    Title = "Área de Acerto", 
-    Icon = "gamepad-2"
-});
-HitboxToggle = HitboxTab:Toggle({
-    Title = "Ativar Área de Acerto", 
-    Default = false, 
-    Callback = function(FunctionParam3) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), l_Players_5 (ref), v233 (ref), v229 (ref), v220 (ref)
-        HitboxConfig.Enabled = FunctionParam3;
-        if FunctionParam3 then
-            for PlayerService, LoopVariable2 in ipairs(PlayerService:GetPlayers()) do
-                LocalFunction1(LoopVariable2);
-            end;
-            PlayerService.PlayerAdded:Connect(LocalFunction1);
-            spawn(LocalFunction);
-        else
-            EmptyConfig = {};
-        end;
-    end
-});
-HitboxTab:Section({
-    Title = "Configurações", 
-    Icon = "settings"
-});
-ShowToggle = HitboxTab:Toggle({
-    Title = "Mostrar Áreas de Acerto", 
-    Default = false, 
-    Callback = function(FunctionParam4) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
-        HitboxConfig.ShowHitboxes = FunctionParam4;
-        for PlayerService, LoopVariable3 in pairs(PlayerService:GetPlayers()) do
-            if LoopVariable3 ~= LocalPlayer and LoopVariable3.Team ~= LocalPlayer.Team then
-                local CharacterModel2 = LoopVariable3.Character;
-                if CharacterModel2 then
-                    local RootPart3 = CharacterModel2:FindFirstChild("HumanoidRootPart");
-                    if RootPart3 then
-                        RootPart3.Transparency = FunctionParam4 and HitboxConfig.Transparency or 1;
-                    end;
-                end;
-            end;
-        end;
-    end
-});
-SizeToggle = HitboxTab:Slider({
-    Title = "Tamanho da Área de Acerto", 
-    Value = {
-        Min = 1, 
-        Max = 250, 
-        Default = 5, 
-        Step = 0.1
-    }, 
-    Callback = function(FunctionParam5) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
-        HitboxConfig.Size = FunctionParam5;
-        for PlayerService, LoopVariable4 in pairs(PlayerService:GetPlayers()) do
-            if LoopVariable4 ~= LocalPlayer and LoopVariable4.Team ~= LocalPlayer.Team then
-                local CharacterModel3 = LoopVariable4.Character;
-                if CharacterModel3 then
-                    local RootPart4 = CharacterModel3:FindFirstChild("HumanoidRootPart");
-                    if RootPart4 then
-                        RootPart4.Size = Vector3.new(FunctionParam5, FunctionParam5, FunctionParam5);
-                    end;
-                end;
-            end;
-        end;
-    end
-});
-ColorToggle = HitboxTab:Colorpicker({
-    Title = "Cor da Área de Acerto", 
-    Default = Color3.fromRGB(255, 0, 0), 
-    Transparency = 0.5, 
-    Callback = function(FunctionParam6, FunctionParam7) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
-        HitboxConfig.Color = FunctionParam6;
-        HitboxConfig.Transparency = FunctionParam7;
-        for PlayerService, LoopVariable5 in pairs(PlayerService:GetPlayers()) do
-            if LoopVariable5 ~= LocalPlayer and LoopVariable5.Team ~= LocalPlayer.Team then
-                local CharacterModel4 = LoopVariable5.Character;
-                if CharacterModel4 then
-                    local RootPart5 = CharacterModel4:FindFirstChild("HumanoidRootPart");
-                    if RootPart5 then
-                        RootPart5.Color = FunctionParam6;
-                        RootPart5.Transparency = HitboxConfig.ShowHitboxes and FunctionParam7 or 1;
-                    end;
-                end;
-            end;
-        end;
-    end
-});
-Trans = HitboxTab:Slider({
-    Title = "Transparência da Área de Acerto", 
-    Step = 0.1, 
-    Value = {
-        Min = 0, 
-        Max = 1, 
-        Default = 0.5
-    }, 
-    Callback = function(FunctionParam8) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: v219 (ref), l_Players_5 (ref), l_LocalPlayer_5 (ref)
-        HitboxConfig.Transparency = FunctionParam8;
-        for PlayerService, LoopVariable6 in pairs(PlayerService:GetPlayers()) do
-            if LoopVariable6 ~= LocalPlayer and LoopVariable6.Team ~= LocalPlayer.Team then
-                local CharacterModel5 = LoopVariable6.Character;
-                if CharacterModel5 then
-                    local RootPart6 = CharacterModel5:FindFirstChild("HumanoidRootPart");
-                    if RootPart6 then
-                        RootPart6.Transparency = HitboxConfig.ShowHitboxes and FunctionParam8 or 1;
-                    end;
-                end;
-            end;
-        end;
-    end
-});
-local PlayerTab = MainWindow:Tab({
-    Title = "Jogador", 
-    Icon = "user", 
-    Locked = false
-});
-PlayerTab:Section({
-    Title = "Giro", 
-    Icon = "shield-user"
-});
-getgenv().spinEnabled = false;
-getgenv().spinSpeed = 100;
-getgenv().modsRequireMatch = true;
-local LocalPlayer2 = game.Players.LocalPlayer;
-local SpinToggle = PlayerTab:Toggle({
-    Title = "Giro", 
-    Value = false, 
-    Callback = function(SpinParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: l_LocalPlayer_7 (ref)
-        getgenv().spinEnabled = SpinParam;
-        local CharacterModel6 = LocalPlayer2.Character;
-        if not CharacterModel6 then
-            return;
-        else
-            local RootPart7 = CharacterModel6:FindFirstChild("HumanoidRootPart");
-            if not RootPart7 then
-                return;
-            else
-                for PlayerService, LoopVariable9 in ipairs(RootPart7:GetChildren()) do
-                    if LoopVariable9.Name == "Spinning" then
-                        LoopVariable9:Destroy();
-                    end;
-                end;
-                if SpinParam and (not getgenv().modsRequireMatch or LocalPlayer2:GetAttribute("Match")) then
-                    local BodyAngularVelocity = Instance.new("BodyAngularVelocity");
-                    BodyAngularVelocity.Name = "Spinning";
-                    BodyAngularVelocity.Parent = RootPart7;
-                    BodyAngularVelocity.MaxTorque = Vector3.new(0, math.huge, 0);
-                    BodyAngularVelocity.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
-                end;
-                return;
-            end;
-        end;
-    end
-});
-local SpinSpeedSlider = PlayerTab:Slider({
-    Title = "Velocidade da Rotação", 
-    Step = 5, 
-    Value = {
-        Min = 10, 
-        Max = 500, 
-        Default = 100
-    }, 
-    Callback = function(SpinSpeedParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        -- upvalues: l_LocalPlayer_7 (ref)
-        getgenv().spinSpeed = tonumber(SpinSpeedParam);
-        local CharacterModel7 = LocalPlayer2.Character;
-        if not CharacterModel7 then
-            return;
-        else
-            local RootPart8 = CharacterModel7:FindFirstChild("HumanoidRootPart");
-            if not RootPart8 then
-                return;
-            else
-                local Spinning = RootPart8:FindFirstChild("Spinning");
-                if Spinning then
-                    Spinning.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
-                end;
-                return;
-            end;
-        end;
-    end
-});
-LocalPlayer2.CharacterAdded:Connect(function(SpinningParam) --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: l_LocalPlayer_7 (ref)
-    SpinningParam:WaitForChild("HumanoidRootPart");
-    task.wait(0.5);
-    local RootPart9 = SpinningParam:FindFirstChild("HumanoidRootPart");
-    if getgenv().spinEnabled and (not getgenv().modsRequireMatch or LocalPlayer2:GetAttribute("Match")) and RootPart9 then
-        for PlayerService, LoopVariable10 in ipairs(RootPart9:GetChildren()) do
-            if LoopVariable10.Name == "Spinning" then
-                LoopVariable10:Destroy();
-            end;
-        end;
-        local BodyAngularVelocity1 = Instance.new("BodyAngularVelocity");
-        BodyAngularVelocity1.Name = "Spinning";
-        BodyAngularVelocity1.Parent = RootPart9;
-        BodyAngularVelocity1.MaxTorque = Vector3.new(0, math.huge, 0);
-        BodyAngularVelocity1.AngularVelocity = Vector3.new(0, getgenv().spinSpeed / 10, 0);
-    end;
-end);
-PlayerTab:Section({
-    Title = "Jogador Local", 
-    Icon = "user"
-});
-local SpeedToggle = PlayerTab:Toggle({
-    Title = "Definir Velocidade", 
-    Value = false, 
-    Callback = function(SpeedParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().speedEnabled = SpeedParam;
-    end
-});
-local SpeedSlider = PlayerTab:Slider({
-    Title = "Valor da Velocidade", 
-    Step = 1, 
-    Value = {
-        Min = 16, 
-        Max = 150, 
-        Default = 16
-    }, 
-    Callback = function(SpeedParam1) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().walkSpeedValue = tonumber(SpeedParam1);
-    end
-});
-local SpeedModeDropdown = PlayerTab:Dropdown({
-    Title = "Modo de Velocidade", 
-    Values = {
-        "Normal", 
-        "Explícito"
-    }, 
-    Value = "Normal", 
-    Callback = function(SpeedModeParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().speedMode = SpeedModeParam == "Explícito" and "Blatant" or SpeedModeParam;
-    end
-});
-getgenv().speedEnabled = false;
-getgenv().walkSpeedValue = 16;
-getgenv().speedMode = "Normal";
-local PlayerService1 = game:GetService("Players");
-local RunService1 = game:GetService("RunService");
-local LocalPlayer3 = PlayerService1.LocalPlayer;
-local RunService2 = game:GetService("RunService");
-local LocalPlayer4 = game.Players.LocalPlayer;
-RunService2.RenderStepped:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
-    -- upvalues: l_LocalPlayer_9 (ref)
-    if not getgenv().modsRequireMatch or LocalPlayer4:GetAttribute("Match") then
-        if not getgenv().speedEnabled then
-            return;
-        else
-            local CharacterModel8 = LocalPlayer4.Character;
-            if not CharacterModel8 or not CharacterModel8:FindFirstChild("Humanoid") or not CharacterModel8:FindFirstChild("HumanoidRootPart") then
-                return;
-            else
-                local Humanoid = CharacterModel8.Humanoid;
-                local RootPart10 = CharacterModel8.HumanoidRootPart;
-                if getgenv().speedMode == "Normal" then
-                    Humanoid.WalkSpeed = getgenv().walkSpeedValue;
-                elseif getgenv().speedMode == "Blatant" then
-                    local MoveDirection = Humanoid.MoveDirection;
-                    if MoveDirection.Magnitude > 0 then
-                        RootPart10.CFrame = RootPart10.CFrame + MoveDirection * (getgenv().walkSpeedValue / 50);
-                    end;
-                end;
-            end;
-        end;
-    end;
-end);
-local JumpPowerToggle = PlayerTab:Toggle({
-    Title = "Definir Força do Pulo", 
-    Value = false, 
-    Callback = function(JumpPowerParam) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().jumpEnabled = JumpPowerParam;
-    end
-});
-local JumpPowerSlider = PlayerTab:Slider({
-    Title = "Força do Pulo", 
-    Step = 1, 
-    Value = {
-        Min = 50, 
-        Max = 200, 
-        Default = 50
-    }, 
-    Callback = function(JumpPowerParam1) --[[ Line: 0 ]] --[[ Name:  ]]
-        getgenv().jumpPowerValue = tonumber(JumpPowerParam1);
-    end
-});
-getgenv().jumpEnabled = false;
-getgenv().jumpPowerValue = 50;
-game:GetService("RunService").Heartbeat:Connect(function() --[[ Line: 0 ]] --[[ Name:  ]]
-    if (not getgenv().modsRequireMatch or game.Players.LocalPlayer:GetAttribute("Match")) and getgenv().jumpEnabled then
-        local CharacterModel9 = game.Players.LocalPlayer.Character;
-        if CharacterModel9 and CharacterModel9:FindFirstChild("Humanoid") then
-            CharacterModel9.Humanoid.UseJumpPower = true;
-            CharacterModel9.Humanoid.JumpPower = getgenv().jumpPowerValue;
-        end;
-    end;
-end);
+------------------------------------------------------------
+-- TEMAS  (ativo/inativo = {topo, base, relevo3d})
+------------------------------------------------------------
+local TEMAS = {
+	vermelho = {
+		cabTopo = Color3.fromRGB(116, 116, 116), cabBase = Color3.fromRGB(61, 61, 61),
+		ativo   = {Color3.fromRGB(120, 120, 120), Color3.fromRGB(71, 71, 71), Color3.fromRGB(37, 37, 37)},
+		inativo = {Color3.fromRGB(98, 98, 98), Color3.fromRGB(52, 52, 52), Color3.fromRGB(24, 24, 24)},
+		painel = Color3.fromRGB(34, 34, 34), card = Color3.fromRGB(22, 22, 22),
+		acento = Color3.fromRGB(157, 157, 157),
+	},
+	roxo = {
+		cabTopo = Color3.fromRGB(99, 99, 99), cabBase = Color3.fromRGB(50, 50, 50),
+		ativo   = {Color3.fromRGB(146, 146, 146), Color3.fromRGB(84, 84, 84), Color3.fromRGB(36, 36, 36)},
+		inativo = {Color3.fromRGB(92, 92, 92), Color3.fromRGB(51, 51, 51), Color3.fromRGB(23, 23, 23)},
+		painel = Color3.fromRGB(33, 33, 33), card = Color3.fromRGB(10, 10, 10),
+		acento = Color3.fromRGB(130, 130, 130),
+	},
+}
+local T = TEMAS[TEMA] or TEMAS.vermelho
+T.acentoTopo = T.acento:Lerp(Color3.new(1, 1, 1), 0.3)  -- degrade do "ligado"
+T.acentoBase = T.acento:Lerp(Color3.new(0, 0, 0), 0.25)
+T.acentoHex = T.acento:ToHex()
 
-local EquipmentTab = MainWindow:Tab({
-    Title = "Equipamentos",
-    Icon = "briefcase",
-    Locked = false
-});
+local RAIO = 6
+local HEADER_H = 54
+local SIDEBAR_W = 120
+local SEARCH_H = 48
+local XLAT = SIDEBAR_W + 18
+local ESCURO = Color3.fromRGB(10, 10, 10)
 
-EquipmentTab:Section({
-    Title = "Ferramentas",
-    Icon = "wrench"
-});
+------------------------------------------------------------
+-- HELPERS
+------------------------------------------------------------
+local function corner(obj, r)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r or 6)
+	c.Parent = obj
+end
 
-local TeleportToolName = "Ferramenta de Teleporte";
-local TeleportTool = nil;
+local function borda(obj, esp)
+	local s = Instance.new("UIStroke")
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Thickness = esp
+	s.Color = Color3.new(0, 0, 0)
+	s.Parent = obj
+end
 
-local function RemoveTeleportTool()
-    for _, container in ipairs({LocalPlayer.Backpack, LocalPlayer.Character}) do
-        if container then
-            local existing = container:FindFirstChild(TeleportToolName);
-            if existing then
-                existing:Destroy();
-            end;
-        end;
-    end;
-    TeleportTool = nil;
-end;
+local function contorno(obj, esp)
+	local s = Instance.new("UIStroke")
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Thickness = esp or 2
+	s.Color = Color3.new(0, 0, 0)
+	s.Parent = obj
+end
 
-local function CreateTeleportTool()
-    RemoveTeleportTool();
+local function grad(obj, c1, c2)
+	local g = Instance.new("UIGradient")
+	g.Color = ColorSequence.new(c1, c2)
+	g.Rotation = 90
+	g.Parent = obj
+	return g
+end
 
-    local tool = Instance.new("Tool");
-    tool.Name = TeleportToolName;
-    tool.ToolTip = "Clique para se teleportar";
-    tool.RequiresHandle = false;
-    tool.CanBeDropped = false;
+local function lista(pai, padding)
+	local l = Instance.new("UIListLayout")
+	l.Padding = UDim.new(0, padding or 0)
+	l.SortOrder = Enum.SortOrder.LayoutOrder
+	l.Parent = pai
+	return l
+end
 
-    local equippedMouse = nil;
-    local lastTouchPosition = nil;
-    local touchConnection = nil;
+local function etiqueta(txt, tam, cor, alinh, fonte)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Font = fonte or FONT_TEXTO
+	l.Text = txt
+	l.TextSize = tam
+	l.TextColor3 = cor or Color3.new(1, 1, 1)
+	l.TextXAlignment = alinh or Enum.TextXAlignment.Left
+	l.TextTruncate = Enum.TextTruncate.AtEnd
+	contorno(l, tam >= 20 and 2 or 1.5)
+	return l
+end
 
-    local function getTargetPosition()
-        if equippedMouse and equippedMouse.Hit then
-            return equippedMouse.Hit.Position;
-        end;
+-- Texto que ENCOLHE para caber no espaco (nomes longos ficam menores, como na referencia)
+local function etiquetaAuto(txt, maxTam, cor, alinh, minTam)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Font = FONT_TEXTO
+	l.Text = txt
+	l.TextScaled = true
+	l.TextWrapped = false
+	l.TextColor3 = cor or Color3.new(1, 1, 1)
+	l.TextXAlignment = alinh or Enum.TextXAlignment.Left
+	local lim = Instance.new("UITextSizeConstraint")
+	lim.MaxTextSize = maxTam
+	lim.MinTextSize = minTam or 9
+	lim.Parent = l
+	contorno(l, maxTam >= 20 and 2 or 1.5)
+	return l
+end
 
-        if lastTouchPosition and WorkspaceService.CurrentCamera then
-            local camera = WorkspaceService.CurrentCamera;
-            local ray = camera:ViewportPointToRay(lastTouchPosition.X, lastTouchPosition.Y);
-            local params = RaycastParams.new();
-            params.FilterType = Enum.RaycastFilterType.Exclude;
-            params.FilterDescendantsInstances = {LocalPlayer.Character};
+local ACENTOS = {
+	["\u{E1}"] = "a", ["\u{E0}"] = "a", ["\u{E2}"] = "a", ["\u{E3}"] = "a",
+	["\u{E9}"] = "e", ["\u{EA}"] = "e", ["\u{ED}"] = "i",
+	["\u{F3}"] = "o", ["\u{F4}"] = "o", ["\u{F5}"] = "o", ["\u{FA}"] = "u", ["\u{E7}"] = "c",
+	["\u{C1}"] = "a", ["\u{C0}"] = "a", ["\u{C2}"] = "a", ["\u{C3}"] = "a",
+	["\u{C9}"] = "e", ["\u{CA}"] = "e", ["\u{CD}"] = "i",
+	["\u{D3}"] = "o", ["\u{D4}"] = "o", ["\u{D5}"] = "o", ["\u{DA}"] = "u", ["\u{C7}"] = "c",
+}
+local function norm(t) -- minusculo e sem acento, para a busca
+	t = string.lower(t)
+	for k, v in pairs(ACENTOS) do
+		t = string.gsub(t, k, v)
+	end
+	return t
+end
 
-            local result = WorkspaceService:Raycast(ray.Origin, ray.Direction * 1000, params);
-            return result and result.Position or (ray.Origin + ray.Direction * 100);
-        end;
+local function brilho(pai, trans, altura)
+	local b = Instance.new("Frame")
+	b.BackgroundColor3 = Color3.new(1, 1, 1)
+	b.BackgroundTransparency = trans
+	b.BorderSizePixel = 0
+	b.Position = UDim2.new(0, 5, 0, 4)
+	b.Size = UDim2.new(1, -10, altura or 0.4, 0)
+	b.ZIndex = 3
+	b.Parent = pai
+	corner(b, 4)
+	return b
+end
 
-        return nil;
-    end;
+-- linha de brilho fina no topo (da relevo as linhas, como na referencia)
+local function bisel(pai)
+	local b = Instance.new("Frame")
+	b.BackgroundColor3 = Color3.new(1, 1, 1)
+	b.BackgroundTransparency = 0.9
+	b.BorderSizePixel = 0
+	b.Position = UDim2.new(0, 4, 0, 3)
+	b.Size = UDim2.new(1, -8, 0, 2)
+	b.Parent = pai
+	return b
+end
 
-    tool.Equipped:Connect(function(mouse)
-        equippedMouse = mouse;
-        lastTouchPosition = nil;
+-- Seta (chevron) com duas barras. Retorna (seta, girar).
+-- girar(graus, animar): 0 = "v", 180 = "^", -90 = ">"
+-- Cada barra e posicionada/girada na mao (nao depende do Rotation do pai).
+local function criarSeta(cor, escala)
+	local c = Instance.new("Frame")
+	c.BackgroundTransparency = 1
+	c.AnchorPoint = Vector2.new(0.5, 0.5)
+	c.Size = UDim2.fromOffset(20, 12)
 
-        if touchConnection then
-            touchConnection:Disconnect();
-        end;
+	local barras = {}
+	for _, d in ipairs({{-4, 45}, {4, -45}}) do -- {deslocamento x, rotacao base}
+		local b = Instance.new("Frame")
+		b.AnchorPoint = Vector2.new(0.5, 0.5)
+		b.Size = UDim2.fromOffset(12, 4)
+		b.BackgroundColor3 = cor
+		b.BorderSizePixel = 0
+		b.Parent = c
+		corner(b, 2)
+		table.insert(barras, {b, d[1], d[2]})
+	end
+	local u = Instance.new("UIScale")
+	u.Scale = escala or 1
+	u.Parent = c
 
-        touchConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if not gameProcessed and input.UserInputType == Enum.UserInputType.Touch then
-                lastTouchPosition = input.Position;
-            end;
-        end);
-    end);
+	local mostrado = 0
+	local function pose(graus)
+		mostrado = graus
+		local rad = math.rad(graus)
+		local cs, sn = math.cos(rad), math.sin(rad)
+		for _, it in ipairs(barras) do
+			local ox, oy = it[2], -1
+			it[1].Position = UDim2.new(0.5, ox * cs - oy * sn, 0.5, ox * sn + oy * cs)
+			it[1].Rotation = it[3] + graus
+		end
+	end
+	pose(0)
 
-    tool.Unequipped:Connect(function()
-        equippedMouse = nil;
-        lastTouchPosition = nil;
+	local nvAtual, twAtual
+	local function girar(para, animar)
+		if twAtual then twAtual:Cancel() end
+		if nvAtual then nvAtual:Destroy() nvAtual = nil end
+		if not animar then
+			pose(para)
+			return
+		end
+		local nv = Instance.new("NumberValue")
+		nv.Value = mostrado
+		nv.Changed:Connect(pose)
+		nvAtual = nv
+		twAtual = TweenService:Create(nv, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Value = para})
+		twAtual:Play()
+	end
+	return c, girar
+end
 
-        if touchConnection then
-            touchConnection:Disconnect();
-            touchConnection = nil;
-        end;
-    end);
+-- Botao vermelho (ou roxo) com relevo 3D. Retorna (container, botao, trocarEstilo)
+-- O degrade fica num fundo separado: UIGradient num TextButton pinta o texto.
+local function botao(txt, estilo)
+	local e = T[estilo]
+	local cont = Instance.new("Frame")
+	cont.BackgroundTransparency = 1
 
-    tool.Activated:Connect(function()
-        local character = LocalPlayer.Character;
-        local root = character and character:FindFirstChild("HumanoidRootPart");
-        local targetPosition = getTargetPosition();
+	local base = Instance.new("Frame")
+	base.BackgroundColor3 = e[3]
+	base.Size = UDim2.new(1, 0, 1, -4)
+	base.Position = UDim2.new(0, 0, 0, 4)
+	base.ZIndex = 1
+	base.Parent = cont
+	corner(base, RAIO)
+	borda(base, 3)
 
-        if root and targetPosition then
-            pcall(function()
-                root.CFrame = CFrame.new(targetPosition + Vector3.new(0, 3, 0));
-            end);
-        end;
-    end);
+	local fundo = Instance.new("Frame")
+	fundo.BackgroundColor3 = Color3.new(1, 1, 1)
+	fundo.Size = UDim2.new(1, 0, 1, -4)
+	fundo.ZIndex = 2
+	fundo.Parent = cont
+	corner(fundo, RAIO)
+	borda(fundo, 3)
+	local g = grad(fundo, e[1], e[2])
+	brilho(fundo, 0.78, 0.38)
 
-    tool.Parent = LocalPlayer.Backpack;
-    TeleportTool = tool;
-end;
+	local b = Instance.new("TextButton")
+	b.Text = txt
+	b.Font = FONT
+	b.TextScaled = true
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.BackgroundTransparency = 1
+	b.AutoButtonColor = false
+	b.Size = UDim2.new(1, 0, 1, -4)
+	b.ZIndex = 3
+	b.Parent = cont
+	contorno(b, 2)
 
-local TeleportToggle = EquipmentTab:Toggle({
-    Title = "Ferramenta de Teleporte",
-    Value = false,
-    Callback = function(enabled)
-        if enabled then
-            CreateTeleportTool();
-        else
-            RemoveTeleportTool();
-        end;
-    end
-});
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0.2, 0); pad.PaddingBottom = UDim.new(0.2, 0)
+	pad.PaddingLeft = UDim.new(0.08, 0); pad.PaddingRight = UDim.new(0.08, 0)
+	pad.Parent = b
 
-local FreeCamUrl = "https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt";
+	local esc = Instance.new("UIScale")
+	esc.Parent = cont
+	local function t(v)
+		TweenService:Create(esc, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {Scale = v}):Play()
+	end
+	b.MouseEnter:Connect(function() t(1.04) end)
+	b.MouseLeave:Connect(function() t(1) end)
+	b.MouseButton1Down:Connect(function() t(0.94) end)
+	b.MouseButton1Up:Connect(function() t(1.04) end)
 
-local FreeCamButton = EquipmentTab:Button({
-    Title = "Fly",
-    Callback = function()
-        local ok, message = pcall(function()
-            local source = game:HttpGet(FreeCamUrl);
-            local execute = loadstring(source);
-            assert(type(execute) == "function", "Não foi possível carregar o Free Cam");
-            execute();
-        end);
+	local function trocarEstilo(novo)
+		local n = T[novo]
+		g.Color = ColorSequence.new(n[1], n[2])
+		base.BackgroundColor3 = n[3]
+	end
+	return cont, b, trocarEstilo
+end
 
-        if not ok then
-            warn("Falha ao executar o Free Cam: " .. tostring(message));
-        end;
-    end
-});
+------------------------------------------------------------
+-- GUI BASE
+------------------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "ShadowHub2"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = player:WaitForChild("PlayerGui")
 
-local UpdateTab = MainWindow:Tab({
-    Title = "Progresso da Atualização",
-    Icon = "bar-chart-3",
-    Locked = false
-});
+-- "janela": so cuida de posicao e tamanho (arrastar e resize mexem nela)
+local janela = Instance.new("Frame")
+janela.AnchorPoint = Vector2.new(0, 0)
+janela.BackgroundTransparency = 1
+janela.Parent = gui
+local lim = Instance.new("UISizeConstraint")
+lim.MinSize = TAM_MIN
+lim.MaxSize = TAM_MAX
+lim.Parent = janela
 
-UpdateTab:Section({
-    Title = "Status da Atualização",
-    Icon = "upload"
-});
+-- Estado da janela em pixels (jx, jy = canto de cima/esquerda; jw, jh = tamanho).
+-- Arrastar e resize mexem so nestes numeros e depois chamam aplicarJanela():
+-- nada e lido de volta de AbsolutePosition/AbsoluteSize, entao nao tem valor velho.
+local function telaTam()
+	local cam = workspace.CurrentCamera
+	if cam and cam.ViewportSize.X > 0 then return cam.ViewportSize end
+	return gui.AbsoluteSize
+end
 
--- Altere somente este valor no script para atualizar o progresso exibido.
--- Exemplo: 60 = 60% concluído.
-local UpdateProgressPercentage = 90;
-UpdateProgressPercentage = math.clamp(tonumber(UpdateProgressPercentage) or 0, 0, 100);
-getgenv().updateProgress = UpdateProgressPercentage;
+-- posicao atual do ponteiro: toque = posicao do dedo, mouse = posicao do cursor
+local function ponteiro(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		return Vector2.new(input.Position.X, input.Position.Y)
+	end
+	return UIS:GetMouseLocation()
+end
 
-local UpdateStatusTitle;
-if UpdateProgressPercentage <= 0 then
-    UpdateStatusTitle = "Nenhuma atualização no momento";
-elseif UpdateProgressPercentage >= 100 then
-    UpdateStatusTitle = "Atualização concluída";
-else
-    UpdateStatusTitle = "Atualização em andamento";
-end;
+local jw, jh, jx, jy = 0, 0, 0, 0
 
-local ProgressStatus = UpdateTab:Paragraph({
-    Title = UpdateStatusTitle,
-    Desc = "Progresso atual: " .. tostring(UpdateProgressPercentage) .. "%"
-});
+local function limitarJanela()
+	local tela = telaTam()
+	jw = math.clamp(jw, TAM_MIN.X, math.max(TAM_MIN.X, math.min(TAM_MAX.X, tela.X)))
+	jh = math.clamp(jh, TAM_MIN.Y, math.max(TAM_MIN.Y, math.min(TAM_MAX.Y, tela.Y)))
+	jx = math.clamp(jx, 0, math.max(0, tela.X - jw))
+	jy = math.clamp(jy, 0, math.max(0, tela.Y - jh))
+end
 
-local ConfigManagerInstance = MainWindow.ConfigManager;
-local ConfigInstance = MainWindow.ConfigManager:CreateConfig("ToddyHub");
-ConfigInstance:Register("spinToggle", SpinToggle);
-ConfigInstance:Register("spinSpeedSlider", SpinSpeedSlider);
-ConfigInstance:Register("speedToggle", SpeedToggle);
-ConfigInstance:Register("speedSlider", SpeedSlider);
-ConfigInstance:Register("espToggle", EspToggle);
-ConfigInstance:Register("ShowToggle", ShowToggle);
-ConfigInstance:Register("SizeToggle", SizeToggle);
-ConfigInstance:Register("ColorToggle", ColorToggle);
-ConfigInstance:Register("Trans", Trans);
-ConfigInstance:Register("HitboxToggle", HitboxToggle);
-ConfigInstance:Register("jumpToggle", JumpPowerToggle);
-ConfigInstance:Register("jumpSlider", JumpPowerSlider);
-ConfigInstance:Register("speedModeDropdown", SpeedModeDropdown);
-ConfigInstance:Register("autoShootToggle", AutoShootToggle);
-ConfigInstance:Register("autoShootSpeed", AutoShootDelay);
-ConfigInstance:Register("tracersToggle", TracersToggle);
-ConfigInstance:Register("teamToggle", DisplayToggle);
-local LoadFunction = "Load";
-local ConfigReference = ConfigInstance;
-ConfigInstance[LoadFunction](ConfigReference);
-LoadFunction = "SelectTab";
-ConfigReference = MainWindow;
-MainWindow[LoadFunction](ConfigReference, 1);
+local function aplicarJanela()
+	janela.Size = UDim2.fromOffset(jw, jh)
+	janela.Position = UDim2.fromOffset(jx, jy)
+end
+
+do -- tamanho e posicao iniciais: centralizada
+	local tela = telaTam()
+	jw, jh = tela.X * 0.64, tela.Y * 0.82
+	limitarJanela()
+	jx, jy = (tela.X - jw) / 2, (tela.Y - jh) / 2
+	limitarJanela()
+	aplicarJanela()
+end
+
+-- girou a tela / mudou o tamanho da janela do jogo: mantem tudo visivel
+do
+	local cam = workspace.CurrentCamera
+	if cam then
+		cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			limitarJanela()
+			aplicarJanela()
+		end)
+	end
+end
+
+-- "raiz": ocupa a janela inteira e guarda o conteudo; a animacao de abrir/fechar escala ela
+local raiz = Instance.new("Frame")
+raiz.AnchorPoint = Vector2.new(0.5, 0.5)
+raiz.Position = UDim2.fromScale(0.5, 0.5)
+raiz.Size = UDim2.fromScale(1, 1)
+raiz.BackgroundTransparency = 1
+raiz.Visible = false
+raiz.Parent = janela
+local popup = Instance.new("UIScale")
+popup.Scale = 0.6
+popup.Parent = raiz
+
+-- Painel principal (cabecalho + conteudo)
+local main = Instance.new("Frame")
+main.Position = UDim2.new(0, XLAT, 0, 0)
+main.Size = UDim2.new(1, -XLAT, 1, -(SEARCH_H + 12))
+main.BackgroundColor3 = T.painel
+main.BackgroundTransparency = 0.08
+main.Active = true
+main.Parent = raiz
+corner(main, RAIO)
+borda(main, 4)
+
+-- Cabecalho
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, HEADER_H)
+header.BackgroundColor3 = Color3.new(1, 1, 1)
+header.ZIndex = 2
+header.Parent = main
+corner(header, RAIO)
+grad(header, T.cabTopo, T.cabBase)
+
+local filler = Instance.new("Frame")
+filler.AnchorPoint = Vector2.new(0, 1)
+filler.Position = UDim2.fromScale(0, 1)
+filler.Size = UDim2.new(1, 0, 0.5, 0)
+filler.BackgroundColor3 = Color3.new(1, 1, 1)
+filler.BorderSizePixel = 0
+filler.ZIndex = 2
+filler.Parent = header
+grad(filler, T.cabTopo:Lerp(T.cabBase, 0.5), T.cabBase)
+
+local linha = Instance.new("Frame")
+linha.AnchorPoint = Vector2.new(0, 1)
+linha.Position = UDim2.fromScale(0, 1)
+linha.Size = UDim2.new(1, 0, 0, 4)
+linha.BackgroundColor3 = Color3.new(0, 0, 0)
+linha.BorderSizePixel = 0
+linha.ZIndex = 3
+linha.Parent = header
+
+brilho(header, 0.72, 0.38)
+
+local titulo = etiqueta(TITULO, 30, nil, Enum.TextXAlignment.Center, FONT)
+titulo.AnchorPoint = Vector2.new(0.5, 0.5)
+titulo.Position = UDim2.new(0.5, 0, 0.5, -1)
+titulo.Size = UDim2.new(1, -150, 1, -8)
+titulo.ZIndex = 5
+titulo.Parent = header
+
+local fecharC, fechar = botao("X", "ativo")
+fecharC.AnchorPoint = Vector2.new(1, 0.5)
+fecharC.Position = UDim2.new(1, -10, 0.5, -1)
+fecharC.Size = UDim2.fromOffset(38, 38)
+fecharC.ZIndex = 5
+fecharC.Parent = header
+
+-- Lateral (abas)
+local lateral = Instance.new("ScrollingFrame")
+lateral.Position = UDim2.new(0, 4, 0, 14)
+lateral.Size = UDim2.new(0, SIDEBAR_W, 1, -(14 + SEARCH_H + 12))
+lateral.BackgroundTransparency = 1
+lateral.BorderSizePixel = 0
+lateral.ScrollBarThickness = 0
+lateral.CanvasSize = UDim2.new()
+lateral.AutomaticCanvasSize = Enum.AutomaticSize.Y
+lateral.Parent = raiz
+lista(lateral, 10)
+local latPad = Instance.new("UIPadding")
+latPad.PaddingLeft = UDim.new(0, 6); latPad.PaddingRight = UDim.new(0, 6)
+latPad.PaddingTop = UDim.new(0, 4); latPad.PaddingBottom = UDim.new(0, 6)
+latPad.Parent = lateral
+
+-- Busca (embaixo)
+local busca = Instance.new("Frame")
+busca.Position = UDim2.new(0, XLAT, 1, -SEARCH_H)
+busca.Size = UDim2.new(1, -XLAT, 0, SEARCH_H)
+busca.BackgroundColor3 = T.painel
+busca.BackgroundTransparency = 0.08
+busca.Parent = raiz
+corner(busca, RAIO)
+borda(busca, 4)
+
+local buscaRot = etiqueta("Pesquisar", 18, nil, nil, FONT)
+buscaRot.Position = UDim2.new(0, 14, 0, 0)
+buscaRot.Size = UDim2.new(0, 92, 1, 0)
+buscaRot.Parent = busca
+
+local caixaBusca = Instance.new("TextBox")
+caixaBusca.AnchorPoint = Vector2.new(0, 0.5)
+caixaBusca.Position = UDim2.new(0, 110, 0.5, 0)
+caixaBusca.Size = UDim2.new(1, -124, 0, 32)
+caixaBusca.BackgroundColor3 = ESCURO
+caixaBusca.Font = FONT
+caixaBusca.TextSize = 16
+caixaBusca.TextColor3 = Color3.new(1, 1, 1)
+caixaBusca.PlaceholderText = "Filtrar fun\u{E7}\u{F5}es..."
+caixaBusca.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+caixaBusca.Text = ""
+caixaBusca.ClearTextOnFocus = false
+caixaBusca.TextXAlignment = Enum.TextXAlignment.Left
+caixaBusca.Parent = busca
+corner(caixaBusca, 4)
+borda(caixaBusca, 3)
+local cbPad = Instance.new("UIPadding")
+cbPad.PaddingLeft = UDim.new(0, 10)
+cbPad.Parent = caixaBusca
+
+------------------------------------------------------------
+-- VARIAVEIS OBSERVAVEIS + WIDGETS (toggle e slider usados em varios lugares)
+-- Uma "funcao" guarda o valor e avisa todo mundo que mostra ela (janela e Quick
+-- Bars). Assim, mexer em um lugar atualiza o outro, e a acao roda uma vez so.
+------------------------------------------------------------
+local function novaVar(valor)
+	local v = {valor = valor, ouvintes = {}}
+	function v.definir(novo, chamar)
+		if v.valor == novo then return end
+		v.valor = novo
+		for _, fn in ipairs(table.clone(v.ouvintes)) do fn(novo) end
+		if chamar and v.aoMudar then v.aoMudar(novo) end
+	end
+	function v.ouvir(fn) -- chama ja com o valor atual; devolve como parar de ouvir
+		table.insert(v.ouvintes, fn)
+		fn(v.valor)
+		return function()
+			local k = table.find(v.ouvintes, fn)
+			if k then table.remove(v.ouvintes, k) end
+		end
+	end
+	return v
+end
+
+local funcoes = {}          -- todo toggle/slider criado (a aba Quick Bar lista estes)
+local abaAtualNome = ""
+
+local function novaFuncao(item)
+	local f
+	if item.tipo == "toggle" then
+		f = novaVar(item.padrao == true)
+	else
+		f = novaVar(item.valor or item.min or 0)
+	end
+	f.item = item
+	f.nome = item.nome
+	f.aba = abaAtualNome
+	f.rapido = item.rapido ~= false -- rapido = false: nao aparece na lista da Quick Bar
+	f.aoMudar = item.acao
+	table.insert(funcoes, f)
+	return f
+end
+
+-- Toggle ligado a uma variavel. aoClicar(novoValor). Retorna (botao, pararDeOuvir)
+-- Desligado: caixa escura. Ligado: degrade colorido que aparece com fade + botao branco.
+local function criarToggle(pai, var, aoClicar, W, H)
+	local kw = math.floor(W * 0.38)
+	local tr = Instance.new("TextButton")
+	tr.Text = ""
+	tr.AutoButtonColor = false
+	tr.Size = UDim2.fromOffset(W, H)
+	tr.BackgroundColor3 = Color3.new(1, 1, 1)
+	tr.Parent = pai
+	corner(tr, 4)
+	borda(tr, 3)
+	grad(tr, Color3.fromRGB(38, 38, 38), ESCURO)
+
+	local ligadoFundo = Instance.new("Frame")
+	ligadoFundo.Size = UDim2.fromScale(1, 1)
+	ligadoFundo.BackgroundColor3 = Color3.new(1, 1, 1)
+	ligadoFundo.BackgroundTransparency = 1
+	ligadoFundo.BorderSizePixel = 0
+	ligadoFundo.ZIndex = 1
+	ligadoFundo.Parent = tr
+	corner(ligadoFundo, 4)
+	grad(ligadoFundo, T.acentoTopo, T.acentoBase)
+
+	local kn = Instance.new("Frame")
+	kn.AnchorPoint = Vector2.new(0, 0.5)
+	kn.Size = UDim2.fromOffset(kw, H - 8)
+	kn.BackgroundColor3 = Color3.new(1, 1, 1)
+	kn.ZIndex = 2
+	kn.Parent = tr
+	corner(kn, 3)
+	borda(kn, 2)
+	grad(kn, Color3.new(1, 1, 1), Color3.fromRGB(197, 197, 197))
+
+	local function pintar(on, animar)
+		local transp = on and 0 or 1
+		local pos = UDim2.new(0, on and (W - kw - 4) or 4, 0.5, 0)
+		if animar then
+			TweenService:Create(ligadoFundo, TweenInfo.new(0.15), {BackgroundTransparency = transp}):Play()
+			TweenService:Create(kn, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Position = pos}):Play()
+		else
+			ligadoFundo.BackgroundTransparency = transp
+			kn.Position = pos
+		end
+	end
+	pintar(var.valor, false)
+	local parar = var.ouvir(function(v) pintar(v, true) end)
+	tr.Activated:Connect(function() aoClicar(not var.valor) end)
+	return tr, parar
+end
+
+-- Caixa escura com o valor do slider (o sufixo, como "%", fica colorido). Retorna o label.
+local function criarCaixaValor(pai, W, H, pos, anc)
+	local caixa = Instance.new("Frame")
+	caixa.AnchorPoint = anc
+	caixa.Position = pos
+	caixa.Size = UDim2.fromOffset(W, H)
+	caixa.BackgroundColor3 = Color3.new(1, 1, 1)
+	caixa.Parent = pai
+	corner(caixa, 4)
+	borda(caixa, 3)
+	grad(caixa, Color3.fromRGB(38, 38, 38), ESCURO)
+
+	local l = etiquetaAuto("", 18, nil, Enum.TextXAlignment.Center, 10)
+	l.RichText = true
+	l.Position = UDim2.new(0, 4, 0, 2)
+	l.Size = UDim2.new(1, -8, 1, -4)
+	l.Parent = caixa
+	return l
+end
+
+-- Slider ligado a uma funcao. trava(true/false) = bloqueia a rolagem enquanto arrasta.
+-- Retorna (trilho, destruir)
+local function criarSlider(pai, f, rotValor, tam, pos, anc, trava)
+	local item = f.item
+	local mn, mxv, passo = item.min or 0, item.max or 100, item.passo or 1
+	local sufixo = item.sufixo and ('<font color="#' .. T.acentoHex .. '">' .. item.sufixo .. '</font>') or ""
+
+	local trilho = Instance.new("Frame")
+	trilho.AnchorPoint = anc
+	trilho.Position = pos
+	trilho.Size = tam
+	trilho.BackgroundColor3 = Color3.new(1, 1, 1)
+	trilho.Parent = pai
+	corner(trilho, 4)
+	borda(trilho, 3)
+	grad(trilho, Color3.fromRGB(38, 38, 38), ESCURO)
+
+	local preench = Instance.new("Frame")
+	preench.BackgroundColor3 = Color3.new(1, 1, 1)
+	preench.BorderSizePixel = 0
+	preench.Size = UDim2.fromScale(0, 1)
+	preench.Parent = trilho
+	corner(preench, 4)
+	grad(preench, T.acentoTopo, T.acentoBase)
+
+	local knob = Instance.new("Frame")
+	knob.Size = UDim2.new(0, 16, 1, 8)
+	knob.BackgroundColor3 = Color3.new(1, 1, 1)
+	knob.ZIndex = 3
+	knob.Parent = trilho
+	corner(knob, 3)
+	borda(knob, 2)
+	grad(knob, Color3.new(1, 1, 1), Color3.fromRGB(197, 197, 197))
+
+	local function pintar(v)
+		local frac = (mxv > mn) and (v - mn) / (mxv - mn) or 0
+		preench.Size = UDim2.fromScale(frac, 1)
+		knob.AnchorPoint = Vector2.new(frac, 0.5)
+		knob.Position = UDim2.new(frac, 0, 0.5, 0)
+		if rotValor then rotValor.Text = tostring(v) .. sufixo end
+	end
+	local parar = f.ouvir(pintar)
+
+	local function doX(x)
+		local frac = math.clamp((x - trilho.AbsolutePosition.X) / math.max(1, trilho.AbsoluteSize.X), 0, 1)
+		local v = math.floor((mn + frac * (mxv - mn)) / passo + 0.5) * passo
+		f.definir(math.clamp(v, mn, mxv), true)
+	end
+
+	local hit = Instance.new("TextButton")
+	hit.Text = ""
+	hit.BackgroundTransparency = 1
+	hit.AnchorPoint = Vector2.new(0, 0.5)
+	hit.Position = UDim2.fromScale(0, 0.5)
+	hit.Size = UDim2.new(1, 0, 0, 40)
+	hit.ZIndex = 5
+	hit.Parent = trilho
+
+	local deslizando, entrada = false, nil
+	hit.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			deslizando = true
+			entrada = input
+			if trava then trava(true) end
+			doX(input.Position.X)
+		end
+	end)
+	local c1 = UIS.InputChanged:Connect(function(input)
+		if deslizando and (input.UserInputType == Enum.UserInputType.MouseMovement or input == entrada) then
+			doX(input.Position.X)
+		end
+	end)
+	local c2 = UIS.InputEnded:Connect(function(input)
+		if deslizando and (input == entrada or input.UserInputType == Enum.UserInputType.MouseButton1) then
+			deslizando = false
+			if trava then trava(false) end
+		end
+	end)
+	return trilho, function()
+		parar()
+		c1:Disconnect()
+		c2:Disconnect()
+	end
+end
+
+------------------------------------------------------------
+-- QUICK BARS: 3 barras flutuantes (ficam na tela mesmo com o painel fechado)
+------------------------------------------------------------
+local QB_N = 3
+local QB_W = 230
+local qbMostrar = true
+
+local guiQB = Instance.new("ScreenGui")
+guiQB.Name = "ShadowHub2QuickBars"
+guiQB.ResetOnSpawn = false
+guiQB.IgnoreGuiInset = true
+guiQB.DisplayOrder = ICONE_ORDEM - 1
+guiQB.Parent = player:WaitForChild("PlayerGui")
+
+local barras = {}   -- barras[i] = {frame, esc, qtd, adicionar(fn), remover(fn)}
+local quick = {}    -- quick[funcao] = {barra = n, av = variavel "esta na quick bar?"}
+
+local function atualizarBarras()
+	for _, b in ipairs(barras) do
+		b.frame.Visible = qbMostrar and b.qtd > 0 -- barra vazia fica escondida
+	end
+end
+
+local function definirEscala(e)
+	for _, b in ipairs(barras) do b.esc.Scale = e end
+end
+
+-- arrastar um Frame pelo "handle" (mouse e celular)
+local function arrastavel(handle, alvo)
+	local ativo, inp, ini, x0, y0 = false, nil, Vector2.new(), 0, 0
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			ativo = true
+			inp = input
+			ini = ponteiro(input)
+			x0, y0 = alvo.Position.X.Offset, alvo.Position.Y.Offset
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End and input == inp then
+					ativo = false
+				end
+			end)
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		if not ativo then return end
+		local d = ponteiro(inp) - ini
+		local tela, tam = telaTam(), alvo.AbsoluteSize
+		alvo.Position = UDim2.fromOffset(
+			math.clamp(x0 + d.X, 0, math.max(0, tela.X - tam.X)),
+			math.clamp(y0 + d.Y, 0, math.max(0, tela.Y - tam.Y))
+		)
+	end)
+	UIS.InputEnded:Connect(function(input)
+		if input == inp or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			ativo = false
+		end
+	end)
+end
+
+-- linha de uma funcao dentro da barra. Retorna (linha, limpar)
+local function criarLinhaBarra(corpo, fn, ordem)
+	local item = fn.item
+	local alt = (item.tipo == "slider") and 68 or 46
+
+	local linha = Instance.new("Frame")
+	linha.Size = UDim2.new(1, 0, 0, alt)
+	linha.BackgroundColor3 = T.card
+	linha.BackgroundTransparency = 0.1
+	linha.LayoutOrder = ordem
+	linha.Parent = corpo
+	corner(linha, 4)
+	borda(linha, 3)
+	bisel(linha)
+
+	local limpar = {}
+	if item.tipo == "toggle" then
+		-- nome grande que encolhe se for comprido + toggle largo na direita
+		local nome = etiquetaAuto(fn.nome, 20, nil, Enum.TextXAlignment.Left, 10)
+		nome.Position = UDim2.new(0, 12, 0, 0)
+		nome.Size = UDim2.new(1, -100, 1, 0)
+		nome.Parent = linha
+
+		local tr, parar = criarToggle(linha, fn, function(v) fn.definir(v, true) end, 72, 32)
+		tr.AnchorPoint = Vector2.new(1, 0.5)
+		tr.Position = UDim2.new(1, -10, 0.5, 0)
+		table.insert(limpar, parar)
+	else
+		-- slider: nome pequeno em cima, caixa do valor na direita, trilho embaixo
+		local nome = etiquetaAuto(fn.nome, 16, nil, Enum.TextXAlignment.Left, 9)
+		nome.Position = UDim2.new(0, 12, 0, 6)
+		nome.Size = UDim2.new(1, -108, 0, 26)
+		nome.Parent = linha
+
+		local rot = criarCaixaValor(linha, 84, 26, UDim2.new(1, -10, 0, 6), Vector2.new(1, 0))
+		local _, destruir = criarSlider(linha, fn, rot, UDim2.new(1, -24, 0, 22), UDim2.new(0, 12, 0, 40), Vector2.new(0, 0), nil)
+		table.insert(limpar, destruir)
+	end
+	return linha, function()
+		for _, f in ipairs(limpar) do f() end
+	end
+end
+
+local function criarBarra(i)
+	local b = {qtd = 0, itens = {}, ordem = 0, aberto = true}
+
+	local fr = Instance.new("Frame")
+	fr.Name = "QuickBar" .. i
+	fr.AnchorPoint = Vector2.new(0, 0)
+	fr.Position = UDim2.fromOffset(14 + (i - 1) * (QB_W + 14), 110)
+	fr.Size = UDim2.fromOffset(QB_W, 0)
+	fr.AutomaticSize = Enum.AutomaticSize.Y
+	fr.BackgroundColor3 = Color3.new(1, 1, 1)
+	fr.BackgroundTransparency = 0.08
+	fr.Active = true
+	fr.Visible = false
+	fr.Parent = guiQB
+	corner(fr, 4)
+	borda(fr, 4)
+	grad(fr, T.painel:Lerp(Color3.new(1, 1, 1), 0.1), T.painel)
+	b.frame = fr
+
+	local esc = Instance.new("UIScale")
+	esc.Parent = fr
+	b.esc = esc
+	lista(fr, 0)
+
+	-- cabecalho: arraste por aqui; a seta recolhe/expande
+	local cab = Instance.new("Frame")
+	cab.Size = UDim2.new(1, 0, 0, 36)
+	cab.BackgroundColor3 = Color3.new(1, 1, 1)
+	cab.LayoutOrder = 1
+	cab.Parent = fr
+	corner(cab, 4)
+	borda(cab, 3)
+	grad(cab, Color3.fromRGB(59, 59, 59), Color3.fromRGB(23, 23, 23))
+
+	local titulo = etiqueta("Quick Bar " .. i, 20)
+	titulo.Position = UDim2.new(0, 12, 0, 0)
+	titulo.Size = UDim2.new(1, -60, 1, 0)
+	titulo.Parent = cab
+
+	local seta, girar = criarSeta(Color3.new(1, 1, 1), 1)
+	seta.Position = UDim2.new(1, -22, 0.5, 0)
+	seta.Parent = cab
+
+	local corpo = Instance.new("Frame")
+	corpo.BackgroundTransparency = 1
+	corpo.AutomaticSize = Enum.AutomaticSize.Y
+	corpo.Size = UDim2.new(1, 0, 0, 0)
+	corpo.LayoutOrder = 2
+	corpo.Parent = fr
+	lista(corpo, 8)
+	local cp = Instance.new("UIPadding")
+	cp.PaddingTop = UDim.new(0, 8); cp.PaddingBottom = UDim.new(0, 8)
+	cp.PaddingLeft = UDim.new(0, 8); cp.PaddingRight = UDim.new(0, 8)
+	cp.Parent = corpo
+
+	local toque = Instance.new("TextButton")
+	toque.Text = ""
+	toque.BackgroundTransparency = 1
+	toque.AnchorPoint = Vector2.new(1, 0.5)
+	toque.Position = UDim2.new(1, 0, 0.5, 0)
+	toque.Size = UDim2.new(0, 46, 1, 0)
+	toque.ZIndex = 3
+	toque.Parent = cab
+	toque.Activated:Connect(function()
+		b.aberto = not b.aberto
+		corpo.Visible = b.aberto
+		girar(b.aberto and 0 or -90, true)
+	end)
+
+	arrastavel(cab, fr)
+
+	function b.adicionar(fn)
+		b.ordem += 1
+		local linha, limpar = criarLinhaBarra(corpo, fn, b.ordem)
+		b.itens[fn] = {linha = linha, limpar = limpar}
+		b.qtd += 1
+	end
+	function b.remover(fn)
+		local it = b.itens[fn]
+		if not it then return end
+		it.limpar()
+		it.linha:Destroy()
+		b.itens[fn] = nil
+		b.qtd -= 1
+	end
+	return b
+end
+
+for i = 1, QB_N do barras[i] = criarBarra(i) end
+
+-- poe a funcao na barra n (se ja estava em outra, move)
+local function quickAdicionar(fn, n, av)
+	local q = quick[fn]
+	if q then barras[q.barra].remover(fn) end
+	quick[fn] = {barra = n, av = av}
+	barras[n].adicionar(fn)
+	atualizarBarras()
+end
+
+-- tira a funcao da barra
+local function quickRemover(fn)
+	local q = quick[fn]
+	if not q then return end
+	barras[q.barra].remover(fn)
+	quick[fn] = nil
+	atualizarBarras()
+end
+
+------------------------------------------------------------
+-- LINHAS (itens)
+------------------------------------------------------------
+local estado = {}   -- valores dos dropdowns por id (o botao le daqui)
+local secoes = {}   -- todas as secoes (para a busca)
+
+local function criarLinha(pagina, corpo, item, ordem, secObj)
+	local tamCtrl = 130
+	if item.tipo == "funcaoRapida" then tamCtrl = 172 end
+	local head = item.desc and 64 or 48
+	if item.tipo == "slider" then head = 72 end
+
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0, head)
+	f.BackgroundColor3 = T.card
+	f.ClipsDescendants = true
+	f.LayoutOrder = ordem
+	f.Parent = corpo
+	corner(f, 4)
+	borda(f, 3)
+	f.BackgroundTransparency = 0.1
+	bisel(f)
+	table.insert(secObj.linhas, {f = f, nome = norm(item.nome)})
+
+	-- nome grande que encolhe para caber (como na referencia); descricao pequena e cinza
+	local nome = etiquetaAuto(item.nome, 22, nil, Enum.TextXAlignment.Left, 10)
+	nome.Position = UDim2.new(0, 14, 0, item.desc and 8 or 0)
+	nome.Size = UDim2.new(1, -(tamCtrl + 36), 0, item.desc and 26 or head)
+	nome.Parent = f
+	if item.desc then
+		local d = etiquetaAuto(item.desc, 14, Color3.fromRGB(177, 177, 177), Enum.TextXAlignment.Left, 9)
+		d.Position = UDim2.new(0, 14, 0, 36)
+		d.Size = UDim2.new(1, -(tamCtrl + 36), 0, 20)
+		d.Parent = f
+	end
+
+	if item.tipo == "toggle" then
+		local fn = novaFuncao(item)
+		local tr = criarToggle(f, fn, function(v) fn.definir(v, true) end, 68, 32)
+		tr.AnchorPoint = Vector2.new(1, 0.5)
+		tr.Position = UDim2.new(1, -14, 0.5, 0)
+
+	elseif item.tipo == "botao" then
+		local c, b = botao(item.botao or "Usar", "ativo")
+		c.AnchorPoint = Vector2.new(1, 0.5)
+		c.Position = UDim2.new(1, -14, 0.5, 0)
+		c.Size = UDim2.fromOffset(tamCtrl, 38)
+		c.Parent = f
+		local mx = Instance.new("UITextSizeConstraint")
+		mx.MaxTextSize = 18
+		mx.Parent = b
+		b.Activated:Connect(function()
+			if item.acao then item.acao(item.usa and estado[item.usa] or nil) end
+		end)
+
+	elseif item.tipo == "slider" then
+		local fn = novaFuncao(item)
+		local rotValor = criarCaixaValor(f, 96, 26, UDim2.new(1, -14, 0, 8), Vector2.new(1, 0))
+		criarSlider(f, fn, rotValor, UDim2.fromOffset(tamCtrl + 20, 22), UDim2.new(1, -14, 0, 42), Vector2.new(1, 0),
+			function(travar) pagina.ScrollingEnabled = not travar end)
+
+	elseif item.tipo == "funcaoRapida" then
+		-- linha da aba Quick Bar: escolhe a barra (1/2/3) e liga/desliga "estar na barra"
+		local fn = item.func
+		local n = 1
+		local av = novaVar(false)
+		local aberto = false
+		local xCaixa = -(14 + 68 + 8)
+
+		local caixa = Instance.new("TextButton")
+		caixa.Text = ""
+		caixa.AutoButtonColor = false
+		caixa.AnchorPoint = Vector2.new(1, 0.5)
+		caixa.Position = UDim2.new(1, xCaixa, 0, head / 2)
+		caixa.Size = UDim2.fromOffset(62, 34)
+		caixa.BackgroundColor3 = ESCURO
+		caixa.Parent = f
+		corner(caixa, 4)
+		borda(caixa, 3)
+
+		local num = etiqueta("1", 24, nil, Enum.TextXAlignment.Center)
+		num.Position = UDim2.new(0, 0, 0, 0)
+		num.Size = UDim2.new(1, -20, 1, 0)
+		num.Parent = caixa
+		local seta, girarSeta = criarSeta(Color3.new(1, 1, 1), 0.5)
+		seta.Position = UDim2.new(1, -15, 0.36, 0)
+		seta.Parent = caixa
+		av.ouvir(function(v)
+			num.TextColor3 = v and Color3.new(1, 1, 1) or Color3.fromRGB(121, 121, 121)
+		end)
+
+		local tr = criarToggle(f, av, function(v)
+			av.definir(v)
+			if v then quickAdicionar(fn, n, av) else quickRemover(fn) end
+		end, 68, 32)
+		tr.AnchorPoint = Vector2.new(1, 0.5)
+		tr.Position = UDim2.new(1, -14, 0, head / 2)
+
+		local listaAlt = QB_N * 30 + 8
+		local alturaAberta = head + 4 + listaAlt + 10
+		local lst = Instance.new("Frame")
+		lst.AnchorPoint = Vector2.new(1, 0)
+		lst.Position = UDim2.new(1, xCaixa, 0, head + 4)
+		lst.Size = UDim2.fromOffset(62, listaAlt)
+		lst.BackgroundColor3 = ESCURO
+		lst.Parent = f
+		corner(lst, 4)
+		borda(lst, 2)
+		lista(lst, 0)
+		local lp = Instance.new("UIPadding")
+		lp.PaddingTop = UDim.new(0, 4); lp.PaddingBottom = UDim.new(0, 4)
+		lp.PaddingLeft = UDim.new(0, 4); lp.PaddingRight = UDim.new(0, 4)
+		lp.Parent = lst
+
+		local function definirAberto(v)
+			aberto = v
+			local info = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenService:Create(f, info, {Size = UDim2.new(1, 0, 0, v and alturaAberta or head)}):Play()
+			girarSeta(v and 180 or 0, true)
+		end
+
+		for k = 1, QB_N do
+			local o = Instance.new("TextButton")
+			o.Text = tostring(k)
+			o.Font = FONT
+			o.TextSize = 18
+			o.TextColor3 = Color3.new(1, 1, 1)
+			o.AutoButtonColor = false
+			o.BackgroundTransparency = 1
+			o.Size = UDim2.new(1, 0, 0, 30)
+			o.LayoutOrder = k
+			o.Parent = lst
+			contorno(o, 1.5)
+			o.Activated:Connect(function()
+				n = k
+				num.Text = tostring(k)
+				definirAberto(false)
+				if av.valor then quickAdicionar(fn, n, av) end -- ja estava ligada: muda de barra
+			end)
+		end
+		caixa.Activated:Connect(function() definirAberto(not aberto) end)
+
+	elseif item.tipo == "dropdown" or item.tipo == "multi" then
+		local multi = item.tipo == "multi"
+		local opcoes = item.opcoes
+		local sel = {}
+		local atual = item.padrao
+		local aberto = false
+		local checks = {}
+		if item.id and atual then estado[item.id] = atual end
+
+		local caixa = Instance.new("TextButton")
+		caixa.Text = ""
+		caixa.AutoButtonColor = false
+		caixa.AnchorPoint = Vector2.new(1, 0.5)
+		caixa.Position = UDim2.new(1, -14, 0, head / 2)
+		caixa.Size = UDim2.fromOffset(tamCtrl, 34)
+		caixa.BackgroundColor3 = ESCURO
+		caixa.Parent = f
+		corner(caixa, 4)
+		borda(caixa, 3)
+
+		local txt = etiqueta("", 16, nil, Enum.TextXAlignment.Center)
+		txt.Position = UDim2.new(0, 4, 0, 0)
+		txt.Size = UDim2.new(1, -38, 1, 0)
+		txt.Parent = caixa
+
+		local sep = Instance.new("Frame")
+		sep.Position = UDim2.new(1, -34, 0, 5)
+		sep.Size = UDim2.new(0, 2, 1, -10)
+		sep.BackgroundColor3 = Color3.fromRGB(52, 52, 52)
+		sep.BorderSizePixel = 0
+		sep.Parent = caixa
+
+		local seta, girarSeta = criarSeta(T.acento, 0.8)
+		seta.Position = UDim2.new(1, -18, 0.5, 0)
+		seta.Parent = caixa
+
+		-- lista de opcoes (aparece dentro da propria linha)
+		local nVis = math.min(#opcoes, 6)
+		local listaAlt = nVis * 30 + 8
+		local alturaAberta = head + 4 + listaAlt + 10
+
+		local lst = Instance.new("ScrollingFrame")
+		lst.Position = UDim2.new(0, 10, 0, head + 4)
+		lst.Size = UDim2.new(1, -20, 0, listaAlt)
+		lst.BackgroundColor3 = ESCURO
+		lst.BorderSizePixel = 0
+		lst.ScrollBarThickness = 4
+		lst.CanvasSize = UDim2.new()
+		lst.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		lst.Parent = f
+		corner(lst, 4)
+		borda(lst, 2)
+		lista(lst, 0)
+		local lp = Instance.new("UIPadding")
+		lp.PaddingTop = UDim.new(0, 4); lp.PaddingBottom = UDim.new(0, 4)
+		lp.PaddingLeft = UDim.new(0, 4); lp.PaddingRight = UDim.new(0, 8)
+		lp.Parent = lst
+
+		local function escolhidos()
+			local out = {}
+			for _, op in ipairs(opcoes) do
+				if sel[op] then table.insert(out, op) end
+			end
+			return out
+		end
+
+		local function atualizar()
+			if multi then
+				local l = escolhidos()
+				if #l == 0 then
+					txt.Text = item.vazio or "Nenhum"
+				elseif #l == 1 then
+					txt.Text = l[1]
+				else
+					txt.Text = #l .. " selecionados"
+				end
+			else
+				txt.Text = atual or "Selecionar"
+			end
+			for op, cx in pairs(checks) do
+				local on = false
+				if multi then on = sel[op] == true else on = (atual == op) end
+				cx.BackgroundColor3 = on and T.acento or Color3.fromRGB(34, 34, 34)
+			end
+		end
+
+		local function definirAberto(v)
+			aberto = v
+			local info = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			TweenService:Create(f, info, {Size = UDim2.new(1, 0, 0, v and alturaAberta or head)}):Play()
+			girarSeta(v and 180 or 0, true)
+		end
+
+		for k, op in ipairs(opcoes) do
+			local o = Instance.new("TextButton")
+			o.Text = ""
+			o.AutoButtonColor = false
+			o.BackgroundTransparency = 1
+			o.Size = UDim2.new(1, 0, 0, 30)
+			o.LayoutOrder = k
+			o.Parent = lst
+
+			local cx = Instance.new("Frame")
+			cx.AnchorPoint = Vector2.new(0, 0.5)
+			cx.Position = UDim2.new(0, 6, 0.5, 0)
+			cx.Size = UDim2.fromOffset(16, 16)
+			cx.BackgroundColor3 = Color3.fromRGB(34, 34, 34)
+			cx.Parent = o
+			corner(cx, 3)
+			borda(cx, 2)
+			checks[op] = cx
+
+			local nm = etiqueta(op, 16)
+			nm.Position = UDim2.new(0, 32, 0, 0)
+			nm.Size = UDim2.new(1, -36, 1, 0)
+			nm.Parent = o
+
+			o.Activated:Connect(function()
+				if multi then
+					if sel[op] then sel[op] = nil else sel[op] = true end
+					atualizar()
+					if item.acao then item.acao(escolhidos()) end
+				else
+					atual = op
+					if item.id then estado[item.id] = op end
+					atualizar()
+					definirAberto(false)
+					if item.acao then item.acao(op) end
+				end
+			end)
+		end
+
+		caixa.Activated:Connect(function() definirAberto(not aberto) end)
+		atualizar()
+	end
+end
+
+------------------------------------------------------------
+-- SECOES (recolhiveis, com animacao)
+------------------------------------------------------------
+local function criarSecao(pagina, sec, ordem)
+	local cont = Instance.new("Frame")
+	cont.BackgroundTransparency = 1
+	cont.AutomaticSize = Enum.AutomaticSize.Y
+	cont.Size = UDim2.new(1, 0, 0, 0)
+	cont.LayoutOrder = ordem
+	cont.Parent = pagina
+	lista(cont, 2)
+
+	local cab = Instance.new("TextButton")
+	cab.Text = ""
+	cab.AutoButtonColor = false
+	cab.BackgroundTransparency = 1
+	cab.Size = UDim2.new(1, 0, 0, 36)
+	cab.LayoutOrder = 0
+	cab.Parent = cont
+
+	local cl = lista(cab, 8)
+	cl.FillDirection = Enum.FillDirection.Horizontal
+	cl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	cl.VerticalAlignment = Enum.VerticalAlignment.Center
+
+	local seta, girar = criarSeta(Color3.new(1, 1, 1), 1)
+	seta.LayoutOrder = 1
+	seta.Parent = cab
+
+	local tit = etiqueta(sec.titulo, 26, nil, Enum.TextXAlignment.Center)
+	tit.TextTruncate = Enum.TextTruncate.None
+	tit.AutomaticSize = Enum.AutomaticSize.X
+	tit.Size = UDim2.new(0, 0, 1, 0)
+	tit.LayoutOrder = 2
+	tit.Parent = cab
+
+	-- "recorte" esconde o corpo (altura 0 = fechado); o corpo guarda as linhas
+	local recorte = Instance.new("Frame")
+	recorte.BackgroundTransparency = 1
+	recorte.ClipsDescendants = true
+	recorte.Size = UDim2.new(1, 0, 0, 0)
+	recorte.LayoutOrder = 1
+	recorte.Parent = cont
+
+	local corpo = Instance.new("Frame")
+	corpo.BackgroundTransparency = 1
+	corpo.AutomaticSize = Enum.AutomaticSize.Y
+	corpo.Position = UDim2.fromOffset(4, 0)
+	corpo.Size = UDim2.new(1, -8, 0, 0)
+	corpo.Parent = recorte
+	lista(corpo, 8)
+	local cp = Instance.new("UIPadding")
+	cp.PaddingTop = UDim.new(0, 4)
+	cp.PaddingBottom = UDim.new(0, 4)
+	cp.Parent = corpo
+
+	local obj = {cont = cont, aberto = sec.aberto ~= false, forcado = false, linhas = {}}
+	local animando = false
+	local token = 0
+
+	local function mostrando() return obj.aberto or obj.forcado end
+	local function altura() return corpo.AbsoluteSize.Y / popup.Scale end
+
+	-- aberto e parado: acompanha o tamanho do corpo (linhas que crescem/encolhem)
+	corpo:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if not animando and mostrando() then
+			recorte.Size = UDim2.new(1, 0, 0, altura())
+		end
+	end)
+
+	function obj.aplicar(animar)
+		local abrir = mostrando()
+		girar(abrir and 0 or -90, animar)
+		token += 1
+		local meu = token
+		if animar then
+			animando = true
+			local tw = TweenService:Create(recorte, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{Size = UDim2.new(1, 0, 0, abrir and altura() or 0)})
+			tw.Completed:Connect(function()
+				if meu ~= token then return end
+				animando = false
+				if mostrando() then recorte.Size = UDim2.new(1, 0, 0, altura()) end
+			end)
+			tw:Play()
+		else
+			animando = false
+			recorte.Size = UDim2.new(1, 0, 0, abrir and altura() or 0)
+		end
+	end
+
+	cab.Activated:Connect(function()
+		obj.aberto = not obj.aberto
+		obj.aplicar(true)
+	end)
+
+	for i, item in ipairs(sec.itens) do
+		criarLinha(pagina, corpo, item, i, obj)
+	end
+	obj.aplicar(false)
+	table.insert(secoes, obj)
+end
+
+------------------------------------------------------------
+-- ABAS
+------------------------------------------------------------
+local paginas, trocadores = {}, {}
+local quickPagina = nil
+
+local function selecionar(idx)
+	for j, p in ipairs(paginas) do
+		p.Visible = (j == idx)
+		trocadores[j](j == idx and "ativo" or "inativo")
+	end
+end
+
+for idx, aba in ipairs(abas) do
+	local c, b, trocar = botao(aba.nome, idx == 1 and "ativo" or "inativo")
+	c.Size = UDim2.new(1, 0, 0, 46)
+	c.LayoutOrder = idx
+	c.Parent = lateral
+	trocadores[idx] = trocar
+	b.Activated:Connect(function() selecionar(idx) end)
+
+	local pagina = Instance.new("ScrollingFrame")
+	pagina.Position = UDim2.new(0, 0, 0, HEADER_H)
+	pagina.Size = UDim2.new(1, 0, 1, -HEADER_H)
+	pagina.BackgroundTransparency = 1
+	pagina.BorderSizePixel = 0
+	pagina.ScrollBarThickness = 6
+	pagina.ScrollBarImageColor3 = T.acento
+	pagina.CanvasSize = UDim2.new()
+	pagina.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	pagina.Visible = (idx == 1)
+	pagina.Parent = main
+	lista(pagina, 10)
+	local pp = Instance.new("UIPadding")
+	pp.PaddingTop = UDim.new(0, 10); pp.PaddingBottom = UDim.new(0, 36)
+	pp.PaddingLeft = UDim.new(0, 10); pp.PaddingRight = UDim.new(0, 14)
+	pp.Parent = pagina
+
+	abaAtualNome = aba.nome
+	if aba.especial == "quickbar" then
+		quickPagina = pagina -- montada abaixo, depois que todas as funcoes existirem
+	else
+		for i, sec in ipairs(aba.secoes) do
+			criarSecao(pagina, sec, i)
+		end
+	end
+	paginas[idx] = pagina
+end
+
+-- Aba Quick Bar: lista todas as funcoes (toggle/slider) das outras abas
+if quickPagina then
+	local grupos, ordemGrupos = {}, {}
+	for _, fn in ipairs(funcoes) do
+		if fn.rapido then
+			if not grupos[fn.aba] then
+				grupos[fn.aba] = {}
+				table.insert(ordemGrupos, fn.aba)
+			end
+			table.insert(grupos[fn.aba], {tipo = "funcaoRapida", nome = fn.nome, func = fn})
+		end
+	end
+
+	local secs = {
+		{
+			titulo = "Acesso R\u{E1}pido",
+			itens = {
+				{tipo = "toggle", rapido = false, padrao = true, nome = "Mostrar Quick Bars",
+					desc = "Barras flutuantes; arraste o cabe\u{E7}alho para mover",
+					acao = function(on) qbMostrar = on atualizarBarras() end},
+				{tipo = "slider", rapido = false, nome = "Tamanho das Quick Bars",
+					min = 50, max = 200, passo = 5, valor = 100, sufixo = "%",
+					acao = function(v) definirEscala(v / 100) end},
+			},
+		},
+	}
+	for _, nomeAba in ipairs(ordemGrupos) do
+		table.insert(secs, {titulo = nomeAba, itens = grupos[nomeAba]})
+	end
+	abaAtualNome = "Quick Bar"
+	for i, sec in ipairs(secs) do
+		criarSecao(quickPagina, sec, i)
+	end
+end
+selecionar(1)
+
+------------------------------------------------------------
+-- BUSCA
+------------------------------------------------------------
+local function filtrar(q)
+	q = norm(q)
+	for _, sec in ipairs(secoes) do
+		local achou = 0
+		for _, r in ipairs(sec.linhas) do
+			local ok = (q == "") or (string.find(r.nome, q, 1, true) ~= nil)
+			r.f.Visible = ok
+			if ok then achou += 1 end
+		end
+		sec.cont.Visible = (q == "") or achou > 0
+		sec.forcado = (q ~= "") and achou > 0 -- na busca, secoes com resultado abrem
+		sec.aplicar(false)
+	end
+end
+caixaBusca:GetPropertyChangedSignal("Text"):Connect(function()
+	filtrar(caixaBusca.Text)
+end)
+
+------------------------------------------------------------
+-- ALCA DE RESIZE (canto inferior direito do painel)
+------------------------------------------------------------
+local grip = Instance.new("TextButton")
+grip.Name = "Resize"
+grip.Text = ""
+grip.AutoButtonColor = false
+grip.BackgroundTransparency = 1
+grip.AnchorPoint = Vector2.new(1, 1)
+grip.Position = UDim2.new(1, -6, 1, -6)
+grip.Size = UDim2.fromOffset(36, 36)
+grip.ZIndex = 30
+grip.Parent = main
+
+for _, d in ipairs({{4, 8}, {9, 14}, {14, 20}}) do
+	local t = Instance.new("Frame")
+	t.AnchorPoint = Vector2.new(0.5, 0.5)
+	t.Position = UDim2.fromOffset(36 - d[1], 36 - d[1])
+	t.Size = UDim2.fromOffset(d[2], 3)
+	t.Rotation = -45
+	t.BackgroundColor3 = Color3.new(1, 1, 1)
+	t.BackgroundTransparency = 0.3
+	t.BorderSizePixel = 0
+	t.ZIndex = 31
+	t.Parent = grip
+	corner(t, 2)
+end
+
+------------------------------------------------------------
+-- ARRASTAR (cabecalho) e RESIZE (alca) - PC e celular
+-- Guarda onde o toque/clique comecou e, a cada frame, compara com a posicao
+-- ATUAL do ponteiro (dedo ou cursor) e soma a diferenca ao estado inicial.
+------------------------------------------------------------
+local modo = nil                      -- "arrastar", "resize" ou nil
+local ptrInput, ptrInicio             -- toque/clique em uso e onde comecou
+local ix, iy, iw, ih = 0, 0, 0, 0     -- estado da janela quando comecou
+
+local function comecar(input, qual)
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1
+		and input.UserInputType ~= Enum.UserInputType.Touch then
+		return
+	end
+	modo = qual
+	ptrInput = input
+	ptrInicio = ponteiro(input)
+	ix, iy, iw, ih = jx, jy, jw, jh
+	input.Changed:Connect(function()
+		if input.UserInputState == Enum.UserInputState.End and input == ptrInput then
+			modo = nil
+		end
+	end)
+end
+
+header.InputBegan:Connect(function(input) comecar(input, "arrastar") end)
+grip.InputBegan:Connect(function(input) comecar(input, "resize") end)
+
+RunService.RenderStepped:Connect(function()
+	if not modo then return end
+	local d = ponteiro(ptrInput) - ptrInicio
+	local tela = telaTam()
+
+	if modo == "arrastar" then
+		jx, jy = ix + d.X, iy + d.Y
+	else
+		-- o canto de cima/esquerda fica parado; limita pelo min/max e pela borda da tela
+		local maxW = math.max(TAM_MIN.X, math.min(TAM_MAX.X, tela.X - ix))
+		local maxH = math.max(TAM_MIN.Y, math.min(TAM_MAX.Y, tela.Y - iy))
+		jx, jy = ix, iy
+		jw = math.clamp(iw + d.X, TAM_MIN.X, maxW)
+		jh = math.clamp(ih + d.Y, TAM_MIN.Y, maxH)
+	end
+	limitarJanela()
+	aplicarJanela()
+end)
+
+-- garantia: soltou o mouse/dedo em qualquer lugar, para
+UIS.InputEnded:Connect(function(input)
+	if input == ptrInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		modo = nil
+	end
+end)
+
+------------------------------------------------------------
+-- ABRIR / FECHAR + BOTAO FLUTUANTE
+------------------------------------------------------------
+local painelAberto = false
+
+local function abrirPainel()
+	if painelAberto then return end
+	painelAberto = true
+	raiz.Visible = true
+	popup.Scale = 0.6
+	TweenService:Create(popup, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+end
+
+local function fecharPainel()
+	if not painelAberto then return end
+	painelAberto = false
+	local tw = TweenService:Create(popup, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.6})
+	tw:Play()
+	tw.Completed:Connect(function()
+		if not painelAberto then raiz.Visible = false end
+	end)
+end
+
+fechar.Activated:Connect(fecharPainel)
+
+local icone = Instance.new("ImageButton")
+icone.Name = "ShadowIcon"
+icone.AnchorPoint = Vector2.new(0, 0.5)
+icone.Size = UDim2.fromOffset(ICONE_TAM, ICONE_TAM)
+icone.Position = UDim2.new(0, ICONE_MARGEM, 0.5, 0)
+icone.BackgroundColor3 = Color3.fromRGB(14, 14, 14)
+icone.BackgroundTransparency = 0.08
+icone.Image = ICONE_ID
+icone.ScaleType = Enum.ScaleType.Crop
+icone.AutoButtonColor = false
+icone.ZIndex = 50
+-- ScreenGui separada com DisplayOrder alto: o botao fica acima das outras GUIs
+local guiIcone = Instance.new("ScreenGui")
+guiIcone.Name = "ShadowHub2Icone"
+guiIcone.ResetOnSpawn = false
+guiIcone.IgnoreGuiInset = true
+guiIcone.DisplayOrder = ICONE_ORDEM
+guiIcone.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+guiIcone.Parent = player:WaitForChild("PlayerGui")
+icone.Parent = guiIcone
+corner(icone, ICONE_TAM)
+
+local iconeBorda = Instance.new("UIStroke")
+iconeBorda.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+iconeBorda.Color = T.acento
+iconeBorda.Thickness = 2
+iconeBorda.Transparency = 0.15
+iconeBorda.Parent = icone
+
+icone.MouseButton1Click:Connect(function()
+	if painelAberto then fecharPainel() else abrirPainel() end
+end)
+icone.MouseEnter:Connect(function()
+	TweenService:Create(icone, TweenInfo.new(0.15, Enum.EasingStyle.Back), {Size = UDim2.fromOffset(ICONE_TAM + 4, ICONE_TAM + 4)}):Play()
+end)
+icone.MouseLeave:Connect(function()
+	TweenService:Create(icone, TweenInfo.new(0.15, Enum.EasingStyle.Back), {Size = UDim2.fromOffset(ICONE_TAM, ICONE_TAM)}):Play()
+end)
+
+abrirPainel()
