@@ -1,3 +1,33 @@
+-- ============================================================================
+-- TODDY HUB: BLOQUEIO DE EXECUÇÃO DUPLICADA / UNLOAD
+-- ============================================================================
+local ToddyRuntime = (type(getgenv) == "function" and getgenv()) or _G
+local ToddyInfiniteJumpConnection
+if ToddyRuntime.__ToddyHubRunning then
+    return
+end
+ToddyRuntime.__ToddyHubRunning = true
+ToddyRuntime.__ToddyHubUnload = function()
+    if ToddyInfiniteJumpConnection then
+        pcall(function() ToddyInfiniteJumpConnection:Disconnect() end)
+        ToddyInfiniteJumpConnection = nil
+    end
+    ToddyRuntime.__ToddyHubRunning = false
+    if ToddyRuntime.__ToddyHubGui then
+        pcall(function() ToddyRuntime.__ToddyHubGui:Destroy() end)
+        ToddyRuntime.__ToddyHubGui = nil
+    end
+    if ToddyRuntime.__ToddyHubQuickGui then
+        pcall(function() ToddyRuntime.__ToddyHubQuickGui:Destroy() end)
+        ToddyRuntime.__ToddyHubQuickGui = nil
+    end
+end
+
+-- LocalScript -> coloque em StarterGui
+-- Shadow Hub 2: abas na lateral, secoes recolhiveis, dropdown, multi-selecao,
+-- slider, busca, arrastar e resize. 100% ASCII: acentos usam \u{...}.
+-- Edite so a secao CONFIG.
+
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
@@ -5,9 +35,23 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 ------------------------------------------------------------
+-- PROTEÇÃO DE JOGO: SOMENTE ASSASSINOS VS XERIFES
+------------------------------------------------------------
+local ToddyAllowedPlaceIds = {
+    [13771457545] = true,
+    [12355337193] = true,
+}
+if not ToddyAllowedPlaceIds[game.PlaceId] then
+    pcall(function()
+        player:Kick("Jogo incorreto. Execute este script somente no Assassinos vs Xerifes.")
+    end)
+    return
+end
+
+------------------------------------------------------------
 -- CONFIG
 ------------------------------------------------------------
-local TITULO = "Toddy"
+local TITULO = "Toddy Hub"
 local TEMA = "cinza"       -- "roxo" (preto, branco e roxo) ou "vermelho"
 local FONT = Enum.Font.FredokaOne
 local FONT_TEXTO = Enum.Font.GothamBold -- textos das linhas/barras (como a referencia)
@@ -24,6 +68,19 @@ local ICONE_ORDEM = 1000 -- DisplayOrder: maior = fica por cima das outras GUIs
 --   multi    : nome, desc, opcoes, vazio, acao(listaDeEscolhidos)
 --   slider   : nome, desc, min, max, passo, valor, sufixo, acao(valor)
 --   botao    : nome, desc, botao, usa (id de um dropdown), acao(valorDoDropdown)
+local UpdateProgressPercentage = 0
+UpdateProgressPercentage = math.clamp(tonumber(UpdateProgressPercentage) or 0, 0, 100)
+getgenv().updateProgress = UpdateProgressPercentage
+
+local UpdateStatusTitle
+if UpdateProgressPercentage <= 0 then
+    UpdateStatusTitle = "Nenhuma atualização no momento"
+elseif UpdateProgressPercentage >= 100 then
+    UpdateStatusTitle = "Atualização concluída"
+else
+    UpdateStatusTitle = "Atualização em andamento"
+end
+
 local abas = {
 {
 nome = "Principal",
@@ -50,6 +107,7 @@ secoes = {
 }},
 {titulo = "Equipamentos", itens = {
 {tipo = "botao", nome = "Fly", botao = "EXECUTAR", acao = function() toddyRunFly() end},
+{tipo = "toggle", nome = "Infinite Jump", padrao = false, acao = function(on) toddyInfiniteJumpSet(on) end},
 }},
 },
 },
@@ -60,13 +118,21 @@ secoes = {
 {tipo = "toggle", nome = "ESP", padrao = true, acao = function(on) toddyEspSet(on) end},
 {tipo = "toggle", nome = "Highlight", padrao = true, acao = function(on) toddyEspHighlightSet(on) end},
 {tipo = "toggle", nome = "Nome / Billboard", padrao = true, acao = function(on) toddyEspNameSet(on) end},
-{tipo = "toggle", nome = "Linha / Tracer", padrao = true, acao = function(on) toddyEspTracerSet(on) end},
+{tipo = "toggle", nome = "Linha / Tracer", padrao = false, acao = function(on) toddyEspTracerSet(on) end},
 {tipo = "toggle", nome = "Mostrar Aliados", padrao = false, acao = function(on) toddyEspTeamSet(on) end},
 {tipo = "dropdown", id = "espColor", nome = "Cor do ESP", opcoes = {"Rosa", "Verde", "Azul", "Vermelho", "Amarelo", "Ciano", "Laranja", "Roxo", "Rainbow"}, valor = "Rosa", acao = function(cor) toddyEspColorSet(cor) end},
 }},
 },
 },
 {nome = "Quick Bar", especial = "quickbar"},
+{
+nome = "Configuração",
+secoes = {
+{titulo = "Status da Atualização", itens = {
+{tipo = "paragrafo", nome = UpdateStatusTitle, desc = "Progresso atual: " .. tostring(UpdateProgressPercentage) .. "%", rapido = false},
+}},
+},
+},
 }
 
 ------------------------------------------------------------
@@ -162,7 +228,7 @@ local EspEnemyDark = Color3.fromRGB(57, 57, 57)
 local EspObjects = {}
 getgenv().espEnemies = true
 getgenv().espTeamMates = false
-getgenv().espTracers = true
+getgenv().espTracers = false
 getgenv().espTracerRange = 300
 getgenv().toddyEspHighlight = true
 getgenv().toddyEspName = true
@@ -337,10 +403,46 @@ function toddySpinSet(enabled)
     local root=toddyRoot(ToddyPlayer); if not root then return end; local old=root:FindFirstChild("ToddySpinning"); if old then old:Destroy() end; if enabled then local spin=Instance.new("BodyAngularVelocity");spin.Name="ToddySpinning";spin.MaxTorque=Vector3.new(0,math.huge,0);spin.AngularVelocity=Vector3.new(0,10,0);spin.Parent=root end
 end
 function toddyRunFly()
-    if not toddyInMatch() then return end
-    local ok,message=pcall(function() local source=game:HttpGet("https://raw.githubusercontent.com/XNEOFF/FlyGuiV3/main/FlyGuiV3.txt"); local execute=loadstring(source); assert(type(execute)=="function","Nao foi possivel carregar o Free Cam"); execute() end)
-    if not ok then warn("Falha ao executar o Free Cam: "..tostring(message)) end
+    task.spawn(function()
+        local ok, message = pcall(function()
+            local url = "https://raw.githubusercontent.com/Hubs558/Toddy-Fly/refs/heads/main/Toddy%20Fly"
+            local source = game:HttpGet(url)
+            assert(type(source) == "string" and #source > 0, "O codigo do Fly veio vazio")
+
+            -- Correções de compatibilidade do script remoto original:
+            -- main é ScreenGui; os controles pertencem ao Frame.
+            source = source:gsub("main%.Frame", "Frame")
+            source = source:gsub('Font = "SourceSans"', "Font = Enum.Font.SourceSans")
+
+            local env = (type(getgenv) == "function" and getgenv()) or _G
+            local compiler = loadstring or env.loadstring or load
+            assert(type(compiler) == "function", "Este executor nao disponibiliza loadstring/load")
+
+            local execute, compileError = compiler(source)
+            assert(type(execute) == "function", "Falha ao compilar o Fly: " .. tostring(compileError))
+            return execute()
+        end)
+        if not ok then
+            warn("Falha ao executar o Fly: " .. tostring(message))
+        end
+    end)
 end
+
+function toddyInfiniteJumpSet(enabled)
+    if ToddyInfiniteJumpConnection then
+        ToddyInfiniteJumpConnection:Disconnect()
+        ToddyInfiniteJumpConnection = nil
+    end
+    if not enabled then return end
+    ToddyInfiniteJumpConnection = UIS.JumpRequest:Connect(function()
+        local character = ToddyPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.Health > 0 then
+            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
 ToddyRunService.Heartbeat:Connect(function()
     if not toddyInMatch() then return end
     local c=ToddyPlayer.Character; local hum=c and c:FindFirstChildOfClass("Humanoid")
@@ -616,6 +718,7 @@ gui.Name = "ShadowHub2"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
+ToddyRuntime.__ToddyHubGui = gui
 
 -- "janela": so cuida de posicao e tamanho (arrastar e resize mexem nela)
 local janela = Instance.new("Frame")
@@ -1010,6 +1113,7 @@ guiQB.ResetOnSpawn = false
 guiQB.IgnoreGuiInset = true
 guiQB.DisplayOrder = ICONE_ORDEM - 1
 guiQB.Parent = player:WaitForChild("PlayerGui")
+ToddyRuntime.__ToddyHubQuickGui = guiQB
 
 local barras = {}   -- barras[i] = {frame, esc, qtd, adicionar(fn), remover(fn)}
 local quick = {}    -- quick[funcao] = {barra = n, av = variavel "esta na quick bar?"}
@@ -1216,6 +1320,7 @@ local secoes = {}   -- todas as secoes (para a busca)
 
 local function criarLinha(pagina, corpo, item, ordem, secObj)
 	local tamCtrl = 130
+	if item.tipo == "paragrafo" then tamCtrl = 14 end
 	if item.tipo == "funcaoRapida" then tamCtrl = 172 end
 	local head = item.desc and 64 or 48
 	if item.tipo == "slider" then head = 72 end
